@@ -1,0 +1,39 @@
+# Infrastructure definition for Postgres with pgvector and application service
+# Note: For day-1 development and testing, in-memory repositories are used by default.
+# This compose file is provided for future database deployment.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: surface_orchestrator_pgvector
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-orchestrator_db}
+      POSTGRES_USER: ${POSTGRES_USER:-orchestrator_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orchestrator_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../packages/memory/store/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-orchestrator_user} -d ${POSTGRES_DB:-orchestrator_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    container_name: surface_orchestrator_app
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-orchestrator_user}:${POSTGRES_PASSWORD:-orchestrator_password}@db:5432/${POSTGRES_DB:-orchestrator_db}
+      ORCHESTRATOR_ENV: development
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "surface-cli"
+version = "0.1.0"
+description = "CLI adapter providing interactive REPL against orchestrator pipeline"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "contracts",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["surface_cli"]

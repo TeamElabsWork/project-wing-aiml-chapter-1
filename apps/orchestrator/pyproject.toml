@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "orchestrator"
+version = "0.1.0"
+description = "End-to-end pipeline orchestrator for Surface-Aware Agent Orchestration"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "contracts",
+    "gateway",
+    "identity",
+    "routing-surface-policy",
+    "routing-router",
+    "routing-session",
+    "personas-registry",
+    "personas-runtime",
+    "personas-tools-core",
+    "personas-tools-impl",
+    "safety-risk-classifier",
+    "safety-approval",
+    "memory-store",
+    "memory-writer",
+    "memory-retriever",
+    "transparency-routing-log",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["orchestrator"]

@@ -1,0 +1,9 @@
+id: "coder"
+name: "Code Specialist"
+description: "Handles software engineering, code refactoring, test writing, and bug fixes."
+system_prompt: "" # TODO (C1 Persona Owner): Define the coder system prompt
+allowed_tools:
+  - "echo"
+default_autonomy: "semi"
+metadata:
+  domain: "engineering"

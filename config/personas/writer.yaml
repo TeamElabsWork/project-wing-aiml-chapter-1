@@ -1,0 +1,9 @@
+id: "writer"
+name: "Documentation & Content Specialist"
+description: "Handles technical documentation, release notes, and user-facing communications."
+system_prompt: "" # TODO (C1 Persona Owner): Define the writer system prompt
+allowed_tools:
+  - "echo"
+default_autonomy: "full"
+metadata:
+  domain: "documentation"

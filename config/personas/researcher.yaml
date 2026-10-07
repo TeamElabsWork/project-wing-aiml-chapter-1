@@ -1,0 +1,9 @@
+id: "researcher"
+name: "Research & Synthesis Specialist"
+description: "Handles literature reviews, technical research, and information summarization."
+system_prompt: "" # TODO (C1 Persona Owner): Define the researcher system prompt
+allowed_tools:
+  - "echo"
+default_autonomy: "semi"
+metadata:
+  domain: "research"

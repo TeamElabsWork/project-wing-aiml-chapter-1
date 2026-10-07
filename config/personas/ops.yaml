@@ -1,0 +1,9 @@
+id: "ops"
+name: "Operations Specialist"
+description: "Handles infrastructure, deployments, incident response, and log inspection."
+system_prompt: "" # TODO (C1 Persona Owner): Define the ops system prompt
+allowed_tools:
+  - "echo"
+default_autonomy: "supervised"
+metadata:
+  domain: "operations"

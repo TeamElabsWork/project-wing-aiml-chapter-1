@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "surfaces-telegram-slack"
+version = "0.1.0"
+description = "Chat adapter stub for Telegram and Slack surfaces"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "contracts",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["surfaces_telegram_slack"]

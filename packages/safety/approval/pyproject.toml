@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "safety-approval"
+version = "0.1.0"
+description = "Human-in-the-loop and policy approval interface and stubs"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "contracts",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["safety_approval"]

@@ -1,0 +1,56 @@
+# Surface definitions, interaction profiles, and urgency policy rules
+version: "1.0"
+
+surfaces:
+  cli:
+    description: "Developer interactive command line REPL"
+    interactive: true
+    supports_markdown: true
+    default_autonomy: "semi"
+    urgency_keywords:
+      - "urgent"
+      - "asap"
+      - "emergency"
+      - "fix now"
+    max_tokens_budget: 4096
+    metadata:
+      channel: "terminal"
+      allow_raw_formatting: true
+
+  telegram:
+    description: "Mobile messenger interface via Telegram bot"
+    interactive: true
+    supports_markdown: false
+    default_autonomy: "supervised"
+    urgency_keywords:
+      - "urgent"
+      - "sos"
+      - "alert"
+    max_tokens_budget: 1024
+    metadata:
+      channel: "mobile_chat"
+
+  slack:
+    description: "Enterprise collaboration channel and thread interface"
+    interactive: true
+    supports_markdown: true
+    default_autonomy: "semi"
+    urgency_keywords:
+      - "p0"
+      - "p1"
+      - "incident"
+      - "outage"
+    max_tokens_budget: 2048
+    metadata:
+      channel: "team_chat"
+
+  web:
+    description: "Browser web UI dashboard"
+    interactive: true
+    supports_markdown: true
+    default_autonomy: "semi"
+    urgency_keywords:
+      - "urgent"
+    max_tokens_budget: 4096
+    metadata:
+      channel: "browser"

@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "personas-tools-impl"
+version = "0.1.0"
+description = "Concrete tool implementations plugin folder with example echo tool"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "contracts",
+    "personas-tools-core",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["personas_tools_impl"]

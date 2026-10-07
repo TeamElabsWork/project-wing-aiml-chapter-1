@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "routing-router"
+version = "0.1.0"
+description = "Router interface, registry, and MockRouter for RouteDecision synthesis"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "contracts",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["routing_router"]

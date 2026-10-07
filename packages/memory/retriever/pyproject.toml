@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "memory-retriever"
+version = "0.1.0"
+description = "Memory retriever interface and stub"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "contracts",
+    "memory-store",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["memory_retriever"]

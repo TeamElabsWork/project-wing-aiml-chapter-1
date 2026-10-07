@@ -1,0 +1,27 @@
+# Labeled routing benchmark cases for router evaluation
+version: "1.0"
+
+cases:
+  - id: "case_001_code_refactor"
+    input_text: "Refactor this Python function to improve algorithmic complexity and add docstrings"
+    surface: "cli"
+    expected_persona: "coder"
+    expected_autonomy: "semi"
+
+  - id: "case_002_urgent_bug"
+    input_text: "URGENT: production outage on payment endpoint, check recent commits"
+    surface: "slack"
+    expected_persona: "ops"
+    expected_autonomy: "supervised"
+
+  - id: "case_003_research_query"
+    input_text: "Find recent literature papers on diffusion models applied to protein folding"
+    surface: "web"
+    expected_persona: "researcher"
+    expected_autonomy: "semi"
+
+  - id: "case_004_documentation"
+    input_text: "Write a concise README and documentation release notes for the new v1.2 release"
+    surface: "cli"
+    expected_persona: "writer"
+    expected_autonomy: "full"

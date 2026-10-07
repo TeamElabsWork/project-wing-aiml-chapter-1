@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "personas-registry"
+version = "0.1.0"
+description = "Persona registry for loading and indexing persona specifications"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "contracts",
+    "pyyaml>=6.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["personas_registry"]
