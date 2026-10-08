@@ -6,11 +6,13 @@ version: "1.0"
 
 backends:
   router: "unset"            # e.g., "mock", "llm" (RouterRegistry)
-  runtime: "unset"           # e.g., "echo", "react" (RuntimeRegistry)
+  runtime: "unset"           # e.g., "echo", "react", "scripted" (RuntimeRegistry)
+  identity_resolver: "unset" # e.g., "in_memory" (IdentityResolverRegistry)
+  surface_policy: "unset"    # e.g., "yaml" (SurfacePolicyRegistry)
   memory_store: "unset"      # e.g., "in_memory", "postgres" (MemoryStoreRegistry)
   memory_writer: "unset"     # e.g., "stub", "llm" (MemoryWriterRegistry)
   memory_retriever: "unset"  # e.g., "stub", "hybrid" (MemoryRetrieverRegistry)
   session_manager: "unset"   # e.g., "in_memory", "redis" (SessionManagerRegistry)
   risk_classifier: "unset"   # e.g., "rule_based", "llm" (RiskClassifierRegistry)
-  approval_manager: "unset"  # e.g., "stub", "deny_all", "slack" (ApprovalManagerRegistry)
+  approval_manager: "unset"  # e.g., "auto_approve", "deny_all", "pending" (ApprovalManagerRegistry)
   embedding_provider: "unset"# e.g., "mock", "openai" (EmbeddingProviderRegistry)

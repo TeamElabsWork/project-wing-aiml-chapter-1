@@ -115,10 +115,21 @@ class ToolExecutor:
             )
             approval_resp = await self.approval_manager.request_approval(approval_req)
             if not approval_resp.approved:
+                if approval_resp.pending:
+                    return ToolResult(
+                        call_id=tool_call.call_id,
+                        tool_name=tool_call.tool_name,
+                        ok=False,
+                        denied=False,
+                        pending=True,
+                        error=approval_resp.feedback or f"Approval pending for tool '{spec.name}'.",
+                    )
                 return ToolResult(
                     call_id=tool_call.call_id,
                     tool_name=tool_call.tool_name,
                     ok=False,
+                    denied=True,
+                    pending=False,
                     error=approval_resp.feedback or f"Approval denied for tool '{spec.name}'.",
                 )
 

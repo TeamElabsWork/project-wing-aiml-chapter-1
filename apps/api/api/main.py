@@ -6,7 +6,7 @@ Exposes /healthz, /v1/message, /v1/stream (SSE), /v1/webhooks/*, and /v1/approva
 import json
 from typing import Any, AsyncIterator, Dict, Optional
 
-from contracts.models import Response
+from contracts.models import ApprovalResponse, Response
 from fastapi import FastAPI, Header, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from orchestrator.pipeline import OrchestratorPipeline, create_pipeline
@@ -52,7 +52,6 @@ def create_app(
 
     app_pipeline = pipeline or create_pipeline()
     app_idempotency = idempotency_store or InMemoryIdempotencyStore()
-    approvals_db: Dict[str, Dict[str, Any]] = {}
 
     @app.get("/healthz")
     async def healthz() -> Dict[str, str]:
@@ -106,13 +105,33 @@ def create_app(
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     @app.post("/v1/webhooks/telegram")
-    async def telegram_webhook(request: Request) -> Dict[str, Any]:
-        """Ingress webhook for Telegram updates."""
+    async def telegram_webhook(
+        request: Request,
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    ) -> Any:
+        """Ingress webhook for Telegram updates with idempotency deduplication."""
         data = await request.json()
         message = data.get("message", {})
         text = message.get("text", "")
         sender = str(message.get("from", {}).get("id", "telegram-user"))
         chat_id = str(message.get("chat", {}).get("id", "telegram-chat"))
+
+        # Idempotency resolution: update_id -> message_id -> Idempotency-Key header
+        idem_key: Optional[str] = None
+        if data.get("update_id") is not None:
+            idem_key = str(data["update_id"])
+        elif message.get("message_id") is not None:
+            idem_key = str(message["message_id"])
+        elif idempotency_key:
+            idem_key = str(idempotency_key)
+
+        if idem_key:
+            cached = await app_idempotency.get(idem_key)
+            if cached:
+                return JSONResponse(
+                    content=cached,
+                    headers={"X-Idempotent-Replay": "true"},
+                )
 
         resp = await app_pipeline.process(
             raw_input=text,
@@ -121,11 +140,17 @@ def create_app(
             session_id=f"tg-{chat_id}",
             metadata={"telegram_chat_id": chat_id, "telegram_raw": data},
         )
-        return resp.model_dump(mode="json")
+        resp_dict = resp.model_dump(mode="json")
+        if idem_key:
+            await app_idempotency.set(idem_key, resp_dict)
+        return resp_dict
 
     @app.post("/v1/webhooks/slack")
-    async def slack_webhook(request: Request) -> Any:
-        """Ingress webhook for Slack Events API."""
+    async def slack_webhook(
+        request: Request,
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+    ) -> Any:
+        """Ingress webhook for Slack Events API with idempotency deduplication."""
         data = await request.json()
         # Handle Slack URL verification challenge
         if data.get("type") == "url_verification":
@@ -136,6 +161,23 @@ def create_app(
         user = str(event.get("user", "slack-user"))
         channel = str(event.get("channel", "slack-channel"))
 
+        # Idempotency resolution: event_id -> client_msg_id -> Idempotency-Key header
+        idem_key: Optional[str] = None
+        if data.get("event_id") is not None:
+            idem_key = str(data["event_id"])
+        elif event.get("client_msg_id") is not None:
+            idem_key = str(event["client_msg_id"])
+        elif idempotency_key:
+            idem_key = str(idempotency_key)
+
+        if idem_key:
+            cached = await app_idempotency.get(idem_key)
+            if cached:
+                return JSONResponse(
+                    content=cached,
+                    headers={"X-Idempotent-Replay": "true"},
+                )
+
         resp = await app_pipeline.process(
             raw_input=text,
             surface_type="slack",
@@ -143,22 +185,50 @@ def create_app(
             session_id=f"slack-{channel}",
             metadata={"slack_channel": channel, "slack_raw": data},
         )
-        return resp.model_dump(mode="json")
+        resp_dict = resp.model_dump(mode="json")
+        if idem_key:
+            await app_idempotency.set(idem_key, resp_dict)
+        return resp_dict
+
+    @app.get("/v1/approvals/{request_id}")
+    async def get_approval(request_id: str) -> Any:
+        """Retrieve a pending approval request."""
+        req = await app_pipeline.approval_manager.get_pending(request_id)
+        if not req:
+            return JSONResponse(
+                status_code=404, content={"error": f"Request '{request_id}' not found."}
+            )
+        return req.model_dump(mode="json")
 
     @app.post("/v1/approvals/{request_id}")
     async def submit_approval(
         request_id: str,
         decision: ApprovalDecisionRequest,
     ) -> Dict[str, Any]:
-        """Record an approval decision for an action request."""
-        record = {
+        """Record an approval decision for an action request and execute/resume if approved."""
+        approval_response = ApprovalResponse(
+            approved=decision.approved,
+            feedback=decision.feedback,
+            approver=decision.approver_id,
+            pending=False,
+        )
+        res = await app_pipeline.approval_manager.submit_decision(
+            request_id=request_id,
+            decision=approval_response,
+        )
+        if not res:
+            return {"error": f"Request '{request_id}' not found.", "status": "not_found"}
+        record: Dict[str, Any] = {
             "request_id": request_id,
-            "approved": decision.approved,
-            "approver_id": decision.approver_id,
-            "feedback": decision.feedback,
-            "status": "approved" if decision.approved else "denied",
+            "approved": res.approved,
+            "approver_id": res.approver or decision.approver_id,
+            "feedback": res.feedback,
+            "status": "approved" if res.approved else "denied",
         }
-        approvals_db[request_id] = record
+        exec_results = getattr(app_pipeline.approval_manager, "execution_results", {})
+        if request_id in exec_results:
+            tr = exec_results[request_id]
+            record["tool_result"] = tr.model_dump(mode="json")
         return record
 
     return app

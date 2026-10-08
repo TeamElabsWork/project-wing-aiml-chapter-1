@@ -94,11 +94,33 @@ Formal catalog specification of an agent tool.
 Structured tool invocation and execution payloads.
 
 - `ToolCall`: `call_id: str`, `tool_name: str`, `arguments: Dict[str, Any]`
-- `ToolResult`: `call_id: str`, `tool_name: str`, `ok: bool`, `output: Any`, `error: Optional[str]`
+- `ToolResult`:
+  - `call_id: str`: Unique invocation identifier.
+  - `tool_name: str`: Tool invoked.
+  - `ok: bool`: True if tool executed successfully.
+  - `output: Any`: Tool execution output data.
+  - `error: Optional[str]`: Execution or rejection error message.
+  - `denied: bool`: True if the call was explicitly rejected by human/policy approval.
+  - `pending: bool`: True if the call requires human approval before proceeding.
 
 ---
 
-### 7. `Response`
+### 7. `RuntimeResult`
+Structured outcome produced by `AgentRuntime.execute(...)` replacing string inspection.
+
+| Field | Type | Description |
+|---|---|---|
+| `reply_text` | `str` | Primary textual response for user rendering. |
+| `tool_results` | `List[ToolResult]` | Structured outcomes of all tools invoked during the turn. |
+| `pending_approval` | `Optional[ApprovalRequest]` | Populated if any tool requires human authorization. |
+| `error` | `Optional[str]` | Runtime failure message if execution faulted. |
+
+- **Producers**: `AgentRuntime` implementations (`EchoRuntime`, `ScriptedRuntime`, LLM runtimes).
+- **Consumers**: `OrchestratorPipeline` (derives turn `status` strictly from `RuntimeResult`).
+
+---
+
+### 8. `Response`
 End-to-end response delivered back to the calling surface adapter.
 
 | Field | Type | Description |
@@ -108,7 +130,7 @@ End-to-end response delivered back to the calling surface adapter.
 | `route_decision` | `RouteDecision` | The exact RouteDecision that guided execution. |
 | `routing_explanation` | `str` | Formatted transparency line (`Summoned <persona> because ...`). |
 | `session_id` | `str` | The session ID associated with this turn. |
-| `status` | `ResponseStatus` | Execution status: `complete`, `pending_approval`, `denied`, `error`. |
+| `status` | `ResponseStatus` | Execution status: `complete`, `pending_approval`, `denied`, `error`. Derived purely from `RuntimeResult`. |
 | `pending_approval` | `Optional[ApprovalRequest]` | If pending approval, the approval workflow request object. |
 | `timestamp` | `datetime` | Timestamp when the response was generated. |
 | `metadata` | `Dict[str, Any]` | Structured response metrics. |

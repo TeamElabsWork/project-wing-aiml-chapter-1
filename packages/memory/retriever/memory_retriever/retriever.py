@@ -28,8 +28,13 @@ class MemoryRetriever(Protocol):
 class StubMemoryRetriever:
     """Working stub memory retriever forwarding to the repository."""
 
-    def __init__(self, repository: MemoryRepository) -> None:
+    def __init__(
+        self,
+        repository: MemoryRepository,
+        embedding_provider: Optional[Any] = None,
+    ) -> None:
         self.repository = repository
+        self.embedding_provider = embedding_provider
 
     async def retrieve(
         self,
@@ -40,13 +45,22 @@ class StubMemoryRetriever:
         context: Optional[Dict[str, Any]] = None,
         project_tag: Optional[str] = None,
     ) -> List[MemoryNode]:
-        # TODO (E3 Memory Retriever Owner): Implement hybrid lexical + dense vector
-        # retrieval, cross-surface recency decay re-ranking, and MMR diversification.
+        # Embed query text if provider is injected
+        query_embedding: Optional[List[float]] = None
+        if self.embedding_provider:
+            try:
+                vectors = await self.embedding_provider.embed([query])
+                if vectors:
+                    query_embedding = vectors[0]
+            except Exception:
+                query_embedding = None
+
         return await self.repository.search(
             query=query,
             user_id=user_id,
             surface=surface,
             limit=limit,
+            query_embedding=query_embedding,
             project_tag=project_tag,
         )
 
@@ -78,6 +92,3 @@ class MemoryRetrieverRegistry:
         cls.register("stub", lambda **kwargs: StubMemoryRetriever(**kwargs))
         cls.register("default", lambda **kwargs: StubMemoryRetriever(**kwargs))
         cls.register("unset", lambda **kwargs: StubMemoryRetriever(**kwargs))
-
-
-MemoryRetrieverRegistry.register_defaults()

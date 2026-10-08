@@ -104,7 +104,3 @@ def register_default_tools() -> None:
     ToolRegistry.register(ECHO_TOOL_SPEC, echo_tool_handler)
     ToolRegistry.register(GITHUB_PR_TOOL_SPEC, github_pr_handler)
     ToolRegistry.register(DESTRUCTIVE_TOOL_SPEC, destructive_wipe_handler)
-
-
-# Register on import
-register_default_tools()

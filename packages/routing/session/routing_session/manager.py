@@ -117,7 +117,4 @@ class SessionManagerRegistry:
     def register_defaults(cls) -> None:
         cls.register("in_memory", lambda **kwargs: InMemorySessionManager())
         cls.register("default", lambda **kwargs: InMemorySessionManager())
-
-
-# Register defaults
-SessionManagerRegistry.register_defaults()
+        cls.register("unset", lambda **kwargs: InMemorySessionManager())

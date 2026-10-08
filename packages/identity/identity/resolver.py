@@ -3,7 +3,7 @@
 Owner: A4
 """
 
-from typing import Dict, Protocol, Tuple
+from typing import Any, Callable, Dict, Protocol, Tuple
 
 
 class IdentityResolver(Protocol):
@@ -40,3 +40,32 @@ class InMemoryIdentityResolver:
     def register_mapping(self, surface: str, external_id: str, canonical_user_id: str) -> None:
         """Register a known mapping for testing or seeding."""
         self._mappings[(surface.lower(), external_id)] = canonical_user_id
+
+
+class IdentityResolverRegistry:
+    """Registry allowing identity resolver backends to be configured and selected."""
+
+    _registry: Dict[str, Callable[..., IdentityResolver]] = {}
+
+    @classmethod
+    def register(cls, name: str, factory: Callable[..., IdentityResolver]) -> None:
+        cls._registry[name.lower()] = factory
+
+    @classmethod
+    def get(cls, name: str, **kwargs: Any) -> IdentityResolver:
+        lowered = name.lower()
+        if lowered not in cls._registry:
+            raise KeyError(
+                f"IdentityResolver '{name}' not found in registry. Registered: {list(cls._registry.keys())}"
+            )
+        return cls._registry[lowered](**kwargs)
+
+    @classmethod
+    def reset(cls) -> None:
+        cls._registry.clear()
+
+    @classmethod
+    def register_defaults(cls) -> None:
+        cls.register("in_memory", lambda **kwargs: InMemoryIdentityResolver(**kwargs))
+        cls.register("default", lambda **kwargs: InMemoryIdentityResolver(**kwargs))
+        cls.register("unset", lambda **kwargs: InMemoryIdentityResolver(**kwargs))

@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS memory_nodes (
     persona VARCHAR(64) NOT NULL,
     summary TEXT NOT NULL,
     embedding vector(1536),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb
 );
 
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS memory_nodes (
 CREATE INDEX IF NOT EXISTS idx_memory_nodes_user_id ON memory_nodes(user_id);
 CREATE INDEX IF NOT EXISTS idx_memory_nodes_surface ON memory_nodes(surface);
 CREATE INDEX IF NOT EXISTS idx_memory_nodes_project_tag ON memory_nodes(project_tag);
-CREATE INDEX IF NOT EXISTS idx_memory_nodes_created_at ON memory_nodes(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_nodes_timestamp ON memory_nodes(timestamp DESC);
 
 -- Vector similarity search index (cosine distance)
 CREATE INDEX IF NOT EXISTS idx_memory_nodes_embedding ON memory_nodes USING ivfflat (embedding vector_cosine_ops)

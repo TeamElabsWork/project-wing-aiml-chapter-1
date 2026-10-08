@@ -5,6 +5,7 @@ from safety_approval.manager import (
     ApprovalManagerRegistry,
     AutoApproveStub,
     DenyAllApprovalStub,
+    PendingApprovalManager,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "ApprovalManagerRegistry",
     "AutoApproveStub",
     "DenyAllApprovalStub",
+    "PendingApprovalManager",
 ]

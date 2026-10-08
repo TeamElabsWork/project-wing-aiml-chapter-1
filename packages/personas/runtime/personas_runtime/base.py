@@ -15,7 +15,7 @@ from typing import (
     TypeVar,
 )
 
-from contracts.models import Persona, RequestEnvelope, RouteDecision
+from contracts.models import Persona, RequestEnvelope, RouteDecision, RuntimeResult
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
@@ -58,8 +58,8 @@ class AgentRuntime(Protocol):
         session_history: Optional[List[Dict[str, Any]]] = None,
         tool_executor: Optional[Any] = None,
         **kwargs: Any,
-    ) -> str:
-        """Run the persona loop and produce output text."""
+    ) -> RuntimeResult:
+        """Run the persona loop and produce structured RuntimeResult."""
         ...
 
     def stream(

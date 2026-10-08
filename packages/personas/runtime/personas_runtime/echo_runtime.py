@@ -5,9 +5,16 @@ Owner: C2
 
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from contracts.models import Persona, RequestEnvelope, RouteDecision, ToolCall, ToolResult
-
-from personas_runtime.base import RuntimeRegistry
+from contracts.models import (
+    ActionRequest,
+    ApprovalRequest,
+    Persona,
+    RequestEnvelope,
+    RouteDecision,
+    RuntimeResult,
+    ToolCall,
+    ToolResult,
+)
 
 
 class EchoRuntime:
@@ -21,16 +28,22 @@ class EchoRuntime:
         session_history: Optional[List[Dict[str, Any]]] = None,
         tool_executor: Optional[Any] = None,
         **kwargs: Any,
-    ) -> str:
+    ) -> RuntimeResult:
         # TODO (C2 Runtime Owner): Implement actual multi-step ReAct or plan-execute loop,
         # integrating with ToolRegistry and LLMProvider.
         history_count = len(session_history) if session_history else 0
         surface_type = envelope.surface_context.surface_type
 
-        return (
+        reply_text = (
             f"[{persona.name} | Surface: {surface_type} | Autonomy: {decision.autonomy}]\n"
             f'Acknowledged request: "{envelope.raw_text}"\n'
             f"(Context: {history_count} previous turn(s) in session {envelope.session_id})"
+        )
+        return RuntimeResult(
+            reply_text=reply_text,
+            tool_results=[],
+            pending_approval=None,
+            error=None,
         )
 
     async def stream(
@@ -43,7 +56,7 @@ class EchoRuntime:
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         """Stream echo response in chunked tokens."""
-        text = await self.execute(
+        res = await self.execute(
             envelope=envelope,
             decision=decision,
             persona=persona,
@@ -51,7 +64,7 @@ class EchoRuntime:
             tool_executor=tool_executor,
             **kwargs,
         )
-        words = text.split(" ")
+        words = res.reply_text.split(" ")
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
 
@@ -67,8 +80,10 @@ class ScriptedRuntime:
         session_history: Optional[List[Dict[str, Any]]] = None,
         tool_executor: Optional[Any] = None,
         **kwargs: Any,
-    ) -> str:
+    ) -> RuntimeResult:
         raw_lower = envelope.raw_text.lower()
+        tool_results: List[ToolResult] = []
+        pending_approval: Optional[ApprovalRequest] = None
         tool_result_str = "No tool invoked."
 
         if tool_executor:
@@ -94,18 +109,46 @@ class ScriptedRuntime:
                 decision=decision,
                 caller_persona=persona.id,
             )
+            tool_results.append(result)
 
-            if result.ok:
+            if result.pending:
+                req_id = f"appr-{tool_call.call_id}"
+                # Retrieve from approval_manager if possible, else create stub request
+                app_mgr = getattr(tool_executor, "approval_manager", None)
+                if app_mgr and hasattr(app_mgr, "get_pending"):
+                    pending_approval = await app_mgr.get_pending(req_id)
+                if not pending_approval:
+                    pending_approval = ApprovalRequest(
+                        request_id=req_id,
+                        action=ActionRequest(
+                            call_id=tool_call.call_id,
+                            tool_name=tool_name,
+                            arguments=tool_args,
+                            caller_persona=persona.id,
+                        ),
+                        reason=result.error or f"Action '{tool_name}' requires human approval.",
+                    )
+                tool_result_str = (
+                    f"Action '{tool_name}' is paused awaiting approval. Request ID: {req_id}"
+                )
+            elif result.ok:
                 tool_result_str = (
                     f"Tool '{result.tool_name}' executed successfully: {result.output}"
                 )
             else:
                 tool_result_str = f"Tool '{result.tool_name}' failed or was blocked: {result.error}"
 
-        return (
+        reply_text = (
             f"[{persona.name} (Scripted) | Autonomy: {decision.autonomy}]\n"
             f'Request: "{envelope.raw_text}"\n'
             f"Result: {tool_result_str}"
+        )
+
+        return RuntimeResult(
+            reply_text=reply_text,
+            tool_results=tool_results,
+            pending_approval=pending_approval,
+            error=None,
         )
 
     async def stream(
@@ -117,7 +160,7 @@ class ScriptedRuntime:
         tool_executor: Optional[Any] = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
-        text = await self.execute(
+        res = await self.execute(
             envelope=envelope,
             decision=decision,
             persona=persona,
@@ -125,8 +168,5 @@ class ScriptedRuntime:
             tool_executor=tool_executor,
             **kwargs,
         )
-        for chunk in text.splitlines(keepends=True):
+        for chunk in res.reply_text.splitlines(keepends=True):
             yield chunk
-
-
-RuntimeRegistry.register_defaults()

@@ -41,6 +41,8 @@ class ToolRegistry:
     @classmethod
     def register_defaults(cls) -> None:
         try:
-            import personas_tools_impl  # noqa: F401
+            from personas_tools_impl.echo_tool import register_default_tools
+
+            register_default_tools()
         except ImportError:
             pass

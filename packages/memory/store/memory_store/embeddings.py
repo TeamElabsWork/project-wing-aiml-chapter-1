@@ -77,6 +77,3 @@ class EmbeddingProviderRegistry:
         cls.register("mock", lambda **kwargs: MockEmbeddingProvider(**kwargs))
         cls.register("unset", lambda **kwargs: MockEmbeddingProvider(**kwargs))
         cls.register("default", lambda **kwargs: MockEmbeddingProvider(**kwargs))
-
-
-EmbeddingProviderRegistry.register_defaults()

@@ -63,7 +63,6 @@ class RiskClassifierRegistry:
     @classmethod
     def register_defaults(cls) -> None:
         cls.register("stub", lambda **kwargs: StubRiskClassifier())
+        cls.register("rule_based", lambda **kwargs: StubRiskClassifier())
         cls.register("default", lambda **kwargs: StubRiskClassifier())
-
-
-RiskClassifierRegistry.register_defaults()
+        cls.register("unset", lambda **kwargs: StubRiskClassifier())

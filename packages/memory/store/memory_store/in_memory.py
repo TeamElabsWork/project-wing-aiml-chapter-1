@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 from contracts.models import MemoryNode
 
-from memory_store.base import MemoryRepository, MemoryStoreRegistry
+from memory_store.base import MemoryRepository
 
 
 class InMemoryMemoryRepository(MemoryRepository):
@@ -68,6 +68,3 @@ class InMemoryMemoryRepository(MemoryRepository):
         if user_id:
             return [n for n in self._nodes.values() if n.user_id == user_id]
         return list(self._nodes.values())
-
-
-MemoryStoreRegistry.register_defaults()

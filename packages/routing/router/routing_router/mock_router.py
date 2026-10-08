@@ -15,8 +15,6 @@ from contracts.models import (
     SessionState,
 )
 
-from routing_router.base import RouterRegistry
-
 
 class MockRouter:
     """Working mock router returning a RouteDecision based on simple heuristics or fixed values."""
@@ -56,13 +54,25 @@ class MockRouter:
             tools = ["echo"]
             autonomy: Autonomy = "semi"
         elif has_any(
-            ("deploy", "ops", "server", "infra", "k8s", "outage", "incident", "production")
+            (
+                "deploy",
+                "ops",
+                "server",
+                "infra",
+                "k8s",
+                "outage",
+                "incident",
+                "production",
+                "wipe",
+                "delete",
+                "destroy",
+            )
         ):
             persona = "ops"
             reasoning = (
                 f"Task requested infrastructure/incident operations from surface '{surface}'."
             )
-            tools = ["echo"]
+            tools = ["echo", "destructive_wipe"]
             autonomy = "supervised"
         elif has_any(("readme", "documentation", "release notes", "draft")):
             persona = "writer"
@@ -88,6 +98,3 @@ class MockRouter:
             confidence=0.95,
             reasoning=reasoning,
         )
-
-
-RouterRegistry.register_defaults()

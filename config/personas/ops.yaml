@@ -4,6 +4,7 @@ description: "Handles infrastructure, deployments, incident response, and log in
 system_prompt: "" # TODO (C1 Persona Owner): Define the ops system prompt
 allowed_tools:
   - "echo"
+  - "destructive_wipe"
 default_autonomy: "supervised"
 metadata:
   domain: "operations"

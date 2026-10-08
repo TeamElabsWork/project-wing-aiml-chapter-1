@@ -5,7 +5,7 @@ Owner: E2
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
 from contracts.models import MemoryNode, RequestEnvelope, RouteDecision
 from memory_store.base import MemoryRepository
@@ -28,8 +28,13 @@ class MemoryWriter(Protocol):
 class StubMemoryWriter:
     """Working stub memory writer creating a concise summary and saving to repository."""
 
-    def __init__(self, repository: MemoryRepository) -> None:
+    def __init__(
+        self,
+        repository: MemoryRepository,
+        embedding_provider: Optional[Any] = None,
+    ) -> None:
         self.repository = repository
+        self.embedding_provider = embedding_provider
 
     async def write_interaction(
         self,
@@ -38,16 +43,25 @@ class StubMemoryWriter:
         reply_text: str,
         extra_metadata: Dict[str, Any] | None = None,
     ) -> MemoryNode:
-        # TODO (E2 Memory Writer Owner): Implement LLM-based fact extraction,
-        # entity resolution, and dense embedding generation.
+        # Extract summary and compute embedding if provider is injected
+        summary = f"User asked: '{envelope.raw_text[:60]}...' | Handled by {decision.persona}"
+        embedding: Optional[List[float]] = None
+        if self.embedding_provider:
+            try:
+                vectors = await self.embedding_provider.embed([summary])
+                if vectors:
+                    embedding = vectors[0]
+            except Exception:
+                embedding = None
+
         node = MemoryNode(
             node_id=f"mem-{uuid.uuid4().hex[:10]}",
             user_id=envelope.user_id,
             surface=envelope.surface_context.surface_type,
             project_tag=envelope.metadata.get("project_tag"),
             persona=decision.persona,
-            summary=f"User asked: '{envelope.raw_text[:60]}...' | Handled by {decision.persona}",
-            embedding=None,
+            summary=summary,
+            embedding=embedding,
             timestamp=datetime.now(timezone.utc),
             metadata={
                 "message_id": envelope.message_id,
@@ -87,6 +101,3 @@ class MemoryWriterRegistry:
         cls.register("stub", lambda **kwargs: StubMemoryWriter(**kwargs))
         cls.register("default", lambda **kwargs: StubMemoryWriter(**kwargs))
         cls.register("unset", lambda **kwargs: StubMemoryWriter(**kwargs))
-
-
-MemoryWriterRegistry.register_defaults()

@@ -3,17 +3,28 @@
 Owner: D2
 """
 
+import inspect
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Protocol
+from typing import Any, Callable, Dict, Optional, Protocol
 
 from contracts.models import ApprovalRequest, ApprovalResponse
 
 
 class ApprovalManager(Protocol):
-    """Protocol for requesting action approvals."""
+    """Protocol for requesting and processing action approvals."""
 
     async def request_approval(self, request: ApprovalRequest) -> ApprovalResponse:
-        """Process an approval request."""
+        """Process or enqueue an approval request."""
+        ...
+
+    async def submit_decision(
+        self, request_id: str, decision: ApprovalResponse
+    ) -> Optional[ApprovalResponse]:
+        """Submit an approval or rejection decision for a pending request."""
+        ...
+
+    async def get_pending(self, request_id: str) -> Optional[ApprovalRequest]:
+        """Fetch a pending approval request by its ID."""
         ...
 
 
@@ -28,8 +39,17 @@ class AutoApproveStub:
             approved=True,
             approver_id="auto-policy-stub",
             feedback="Auto-approved by default stub policy.",
+            pending=False,
             timestamp=datetime.now(timezone.utc),
         )
+
+    async def submit_decision(
+        self, request_id: str, decision: ApprovalResponse
+    ) -> Optional[ApprovalResponse]:
+        return decision
+
+    async def get_pending(self, request_id: str) -> Optional[ApprovalRequest]:
+        return None
 
 
 class DenyAllApprovalStub:
@@ -41,8 +61,110 @@ class DenyAllApprovalStub:
             approved=False,
             approver_id="deny-all-policy",
             feedback="Action rejected by DenyAllApprovalStub policy.",
+            pending=False,
             timestamp=datetime.now(timezone.utc),
         )
+
+    async def submit_decision(
+        self, request_id: str, decision: ApprovalResponse
+    ) -> Optional[ApprovalResponse]:
+        return decision
+
+    async def get_pending(self, request_id: str) -> Optional[ApprovalRequest]:
+        return None
+
+
+class PendingApprovalManager:
+    """Manages asynchronous human approval workflows by holding requests until decided."""
+
+    def __init__(self) -> None:
+        self._pending: Dict[str, ApprovalRequest] = {}
+        self._decisions: Dict[str, ApprovalResponse] = {}
+        self._execution_results: Dict[str, Any] = {}
+
+    async def request_approval(self, request: ApprovalRequest) -> ApprovalResponse:
+        """Enqueues request into pending table awaiting external authorization."""
+        self._pending[request.request_id] = request
+        return ApprovalResponse(
+            request_id=request.request_id,
+            approved=False,
+            approver_id="pending-queue",
+            feedback="Action queued awaiting human or operator authorization.",
+            pending=True,
+            timestamp=datetime.now(timezone.utc),
+        )
+
+    async def get_pending(self, request_id: str) -> Optional[ApprovalRequest]:
+        return self._pending.get(request_id)
+
+    async def submit_decision(
+        self, request_id: str, decision: ApprovalResponse
+    ) -> Optional[ApprovalResponse]:
+        """Resolves a pending request. If approved, executes the stored ToolCall."""
+        req = self._pending.get(request_id)
+        if not req:
+            return None
+
+        self._decisions[request_id] = decision
+        del self._pending[request_id]
+
+        if decision.approved:
+            # Re-run / resume the pending tool call using ToolRegistry
+            from contracts.models import ToolResult
+            from personas_tools_core.registry import ToolRegistry
+
+            func = ToolRegistry.get(req.action.tool_name)
+            if func:
+                try:
+                    if inspect.iscoroutinefunction(func):
+                        output = await func(**req.action.arguments)
+                    else:
+                        output = func(**req.action.arguments)
+                    tr = ToolResult(
+                        call_id=req.action.call_id,
+                        tool_name=req.action.tool_name,
+                        ok=True,
+                        output=output,
+                        error=None,
+                        denied=False,
+                    )
+                    self._execution_results[request_id] = tr
+                except Exception as e:
+                    tr = ToolResult(
+                        call_id=req.action.call_id,
+                        tool_name=req.action.tool_name,
+                        ok=False,
+                        output=None,
+                        error=str(e),
+                        denied=False,
+                    )
+                    self._execution_results[request_id] = tr
+        else:
+            from contracts.models import ToolResult
+
+            tr = ToolResult(
+                call_id=req.action.call_id,
+                tool_name=req.action.tool_name,
+                ok=False,
+                output=None,
+                error=decision.feedback or "Action rejected by human operator.",
+                denied=True,
+            )
+            self._execution_results[request_id] = tr
+
+        return decision
+
+    @property
+    def execution_results(self) -> Dict[str, Any]:
+        """Access execution results dictionary."""
+        return self._execution_results
+
+    def get_execution_result(self, request_id: str) -> Optional[Any]:
+        """Retrieve output of tool executed upon approval."""
+        return self._execution_results.get(request_id)
+
+    def list_pending(self) -> Dict[str, ApprovalRequest]:
+        return dict(self._pending)
 
 
 class ApprovalManagerRegistry:
@@ -71,8 +193,6 @@ class ApprovalManagerRegistry:
     def register_defaults(cls) -> None:
         cls.register("auto_approve", lambda **kwargs: AutoApproveStub())
         cls.register("deny_all", lambda **kwargs: DenyAllApprovalStub())
+        cls.register("pending", lambda **kwargs: PendingApprovalManager())
         cls.register("default", lambda **kwargs: AutoApproveStub())
         cls.register("unset", lambda **kwargs: AutoApproveStub())
-
-
-ApprovalManagerRegistry.register_defaults()
