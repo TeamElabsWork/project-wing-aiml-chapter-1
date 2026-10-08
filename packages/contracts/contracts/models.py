@@ -5,9 +5,20 @@ Every module may import contracts; no module may import another module's interna
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional, Set
 
 from pydantic import BaseModel, ConfigDict, Field
+
+# Core Literal & Enum domain types
+Autonomy = Literal["full", "semi", "read_only", "supervised"]
+RiskLevel = Literal["low", "medium", "high", "critical"]
+UrgencyLevel = Literal["low", "normal", "high"]
+SideEffects = Literal["none", "read", "write", "external"]
+ExecutionTarget = Literal["local", "remote", "any"]
+ResponseStatus = Literal["complete", "pending_approval", "denied", "error"]
+
+SurfaceType = str
+KNOWN_SURFACES: Set[str] = {"cli", "telegram", "slack", "web"}
 
 
 class SurfaceContext(BaseModel):
@@ -19,7 +30,7 @@ class SurfaceContext(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    surface_type: str = Field(
+    surface_type: SurfaceType = Field(
         ...,
         description="Type of the surface, e.g., 'cli', 'telegram', 'slack', 'web'.",
     )
@@ -39,9 +50,9 @@ class SurfaceContext(BaseModel):
         default=True,
         description="Whether this surface natively renders markdown-formatted text.",
     )
-    urgency_hint: Optional[str] = Field(
+    urgency_hint: Optional[UrgencyLevel] = Field(
         default=None,
-        description="Urgency hint inferred from the surface or client payload (e.g., 'high', 'normal').",
+        description="Urgency hint inferred from the surface or client payload ('low', 'normal', 'high').",
     )
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
@@ -88,6 +99,60 @@ class RequestEnvelope(BaseModel):
     )
 
 
+class PolicyEvaluation(BaseModel):
+    """Structured outcome of surface policy evaluation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    is_urgent: bool = Field(
+        default=False,
+        description="Whether the request is classified as urgent.",
+    )
+    urgency: UrgencyLevel = Field(
+        default="normal",
+        description="Urgency tier ('low', 'normal', 'high').",
+    )
+    default_autonomy: Autonomy = Field(
+        default="semi",
+        description="Default autonomy mode prescribed by the surface policy.",
+    )
+    max_tokens_budget: int = Field(
+        default=2048,
+        description="Maximum token budget recommended for the response on this surface.",
+    )
+    supports_markdown: bool = Field(
+        default=True,
+        description="Whether the active surface can render markdown.",
+    )
+    extras: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional policy evaluation attributes.",
+    )
+
+
+class SessionState(BaseModel):
+    """Structured representation of active multi-turn conversation session state."""
+
+    model_config = ConfigDict(frozen=True)
+
+    session_id: str = Field(
+        ...,
+        description="Unique session identifier.",
+    )
+    history: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of prior interaction turns in chronological order.",
+    )
+    active_persona: Optional[str] = Field(
+        default=None,
+        description="Persona identifier currently active or most recently summoned.",
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Arbitrary session metadata (e.g. created_at, user context).",
+    )
+
+
 class RouteDecision(BaseModel):
     """Central routing contract deciding how an incoming request is dispatched.
 
@@ -105,9 +170,13 @@ class RouteDecision(BaseModel):
         default_factory=list,
         description="List of tool names allowed to be invoked during the execution of this turn.",
     )
-    autonomy: str = Field(
+    autonomy: Autonomy = Field(
         default="semi",
         description="Autonomy mode granted: 'full', 'semi', 'read_only', or 'supervised'.",
+    )
+    urgency: UrgencyLevel = Field(
+        default="normal",
+        description="Urgency classification for this routing decision ('low', 'normal', 'high').",
     )
     confidence: float = Field(
         ...,
@@ -146,7 +215,7 @@ class Persona(BaseModel):
         default_factory=list,
         description="Full catalog of tool names this persona is qualified to use.",
     )
-    default_autonomy: str = Field(
+    default_autonomy: Autonomy = Field(
         default="semi",
         description="Default autonomy level assigned to this persona unless overridden by router.",
     )
@@ -181,6 +250,64 @@ class ToolSpec(BaseModel):
         default_factory=list,
         description="Security or capability scopes needed to authorize executing this tool.",
     )
+    destructive: bool = Field(
+        default=False,
+        description="Whether this tool performs irreversible or destructive mutations.",
+    )
+    side_effects: SideEffects = Field(
+        default="none",
+        description="Nature of side effects caused by this tool: 'none', 'read', 'write', 'external'.",
+    )
+    execution_target: ExecutionTarget = Field(
+        default="any",
+        description="Where this tool must run: 'local' (developer client), 'remote' (server/cloud), 'any'.",
+    )
+
+
+class ToolCall(BaseModel):
+    """Proposed tool call invocation emitted by an agent runtime."""
+
+    model_config = ConfigDict(frozen=True)
+
+    call_id: str = Field(
+        ...,
+        description="Unique call invocation ID.",
+    )
+    tool_name: str = Field(
+        ...,
+        description="Name of the tool to invoke.",
+    )
+    arguments: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Arguments passed to the tool.",
+    )
+
+
+class ToolResult(BaseModel):
+    """Result returned after a tool execution."""
+
+    model_config = ConfigDict(frozen=True)
+
+    call_id: str = Field(
+        ...,
+        description="Matches the call_id of the ToolCall.",
+    )
+    tool_name: str = Field(
+        ...,
+        description="Name of the invoked tool.",
+    )
+    ok: bool = Field(
+        ...,
+        description="Whether execution completed successfully.",
+    )
+    output: Any = Field(
+        default=None,
+        description="Output payload returned by the tool.",
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Error description if execution failed or was denied.",
+    )
 
 
 class ActionRequest(BaseModel):
@@ -204,9 +331,9 @@ class ActionRequest(BaseModel):
         ...,
         description="Persona identifier that initiated the action request.",
     )
-    risk_assessment: Optional[str] = Field(
+    risk_assessment: Optional[RiskLevel] = Field(
         default=None,
-        description="Initial risk score or classification label attached to this action.",
+        description="Assessed risk tier attached to this action ('low', 'medium', 'high', 'critical').",
     )
 
 
@@ -223,8 +350,8 @@ class ApprovalRequest(BaseModel):
         ...,
         description="The underlying tool action requiring human or policy approval.",
     )
-    risk_level: str = Field(
-        ...,
+    risk_level: RiskLevel = Field(
+        default="medium",
         description="Assessed risk level: 'low', 'medium', 'high', or 'critical'.",
     )
     reason: str = Field(
@@ -277,7 +404,7 @@ class MemoryNode(BaseModel):
         ...,
         description="Internal canonical user ID this memory pertains to.",
     )
-    surface: str = Field(
+    surface: SurfaceType = Field(
         ...,
         description="Surface from which this memory originated (e.g., 'cli', 'slack').",
     )
@@ -311,7 +438,7 @@ class Response(BaseModel):
     """End-to-end response delivered back to the calling surface adapter.
 
     Includes the generated reply along with transparency metadata explaining
-    the routing decision.
+    the routing decision, execution status, and any pending approval requests.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -335,6 +462,14 @@ class Response(BaseModel):
     session_id: str = Field(
         ...,
         description="The session ID associated with this turn.",
+    )
+    status: ResponseStatus = Field(
+        default="complete",
+        description="Overall execution status: 'complete', 'pending_approval', 'denied', 'error'.",
+    )
+    pending_approval: Optional[ApprovalRequest] = Field(
+        default=None,
+        description="If status is 'pending_approval', the approval request requiring action.",
     )
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),

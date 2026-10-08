@@ -6,7 +6,7 @@ from personas_runtime.base import (
     LLMProviderRegistry,
     RuntimeRegistry,
 )
-from personas_runtime.echo_runtime import EchoRuntime
+from personas_runtime.echo_runtime import EchoRuntime, ScriptedRuntime
 from personas_runtime.mock_llm import MockLLMProvider
 
 __all__ = [
@@ -16,4 +16,5 @@ __all__ = [
     "LLMProviderRegistry",
     "MockLLMProvider",
     "RuntimeRegistry",
+    "ScriptedRuntime",
 ]

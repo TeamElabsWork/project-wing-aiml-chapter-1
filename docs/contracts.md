@@ -1,17 +1,18 @@
-# System Contracts Reference
+# System Contracts Reference (v0.2.0)
 
 This document catalogs every Pydantic contract located in `packages/contracts/contracts/models.py`, specifying its purpose, schema fields, producers, and consumers.
 
 ---
 
 ### 1. `RouteDecision` (Central Contract)
-The central routing decision contract determining persona, capabilities, autonomy level, and justification.
+The central routing decision contract determining persona, capabilities, autonomy level, urgency, and justification.
 
 | Field | Type | Description |
 |---|---|---|
 | `persona` | `str` | Chosen persona ID (`coder`, `researcher`, `ops`, `writer`). |
 | `tool_scope` | `List[str]` | Whitelist of tools allowed to be called during this turn. |
-| `autonomy` | `str` | Autonomy tier (`supervised`, `semi`, `full`, `read_only`). |
+| `autonomy` | `Autonomy` | Autonomy tier (`supervised`, `semi`, `full`, `read_only`). |
+| `urgency` | `UrgencyLevel` | Urgency tier (`low`, `medium`, `high`, `critical`). |
 | `confidence` | `float` | Router confidence score in range `[0.0, 1.0]`. |
 | `reasoning` | `str` | Clear justification explaining why this route was selected. |
 
@@ -20,7 +21,39 @@ The central routing decision contract determining persona, capabilities, autonom
 
 ---
 
-### 2. `RequestEnvelope`
+### 2. `PolicyEvaluation`
+Structured evaluation output from the Surface Policy Engine.
+
+| Field | Type | Description |
+|---|---|---|
+| `is_urgent` | `bool` | Whether input text or surface cues signify urgent processing. |
+| `urgency` | `UrgencyLevel` | Assessed urgency level (`low`, `medium`, `high`, `critical`). |
+| `default_autonomy` | `Autonomy` | Baseline autonomy permitted by the surface policy. |
+| `max_tokens_budget` | `int` | Maximum recommended token response length. |
+| `supports_markdown` | `bool` | Whether markdown rendering is supported on this surface. |
+| `extras` | `Dict[str, Any]` | Additional surface policy attributes. |
+
+- **Producer**: Surface Policy Engine (`B1`)
+- **Consumer**: Router (`B2`)
+
+---
+
+### 3. `SessionState`
+Multi-turn conversation session state.
+
+| Field | Type | Description |
+|---|---|---|
+| `session_id` | `str` | Unique session identifier. |
+| `history` | `List[Dict[str, Any]]` | List of prior conversation turns. |
+| `active_persona` | `Optional[str]` | Currently assigned sticky persona. |
+| `metadata` | `Dict[str, Any]` | Arbitrary session state variables. |
+
+- **Producer**: Session Manager (`B3`)
+- **Consumers**: Router (`B2`), Agent Runtime (`C2`)
+
+---
+
+### 4. `RequestEnvelope`
 Normalized cross-surface input event.
 
 | Field | Type | Description |
@@ -29,7 +62,7 @@ Normalized cross-surface input event.
 | `session_id` | `str` | Conversation session/thread identifier. |
 | `user_id` | `str` | Internal canonical user ID. |
 | `raw_text` | `str` | Unprocessed input text from the surface. |
-| `surface_context` | `SurfaceContext` | Metadata describing the source surface. |
+| `surface_context` | `SurfaceContext` | Environmental metadata describing the source surface. |
 | `metadata` | `Dict[str, Any]` | Extensible event metadata. |
 | `timestamp` | `datetime` | UTC timestamp of event creation. |
 
@@ -38,115 +71,44 @@ Normalized cross-surface input event.
 
 ---
 
-### 3. `SurfaceContext`
-Environmental attributes and constraints of the client surface.
-
-| Field | Type | Description |
-|---|---|---|
-| `surface_type` | `str` | Surface name (`cli`, `telegram`, `slack`, `web`). |
-| `client_id` | `str` | Client instance identifier. |
-| `channel_id` | `Optional[str]` | Channel or thread ID. |
-| `is_interactive` | `bool` | Whether multi-turn synchronous REPL is supported. |
-| `supports_markdown` | `bool` | Whether markdown rendering is available. |
-| `urgency_hint` | `Optional[str]` | Initial urgency signal from surface client. |
-| `metadata` | `Dict[str, Any]` | Raw headers or platform-specific data. |
-
-- **Producers**: Surface Adapters (`A1`, `A2`), Gateway (`A3`).
-- **Consumers**: Surface Policy (`B1`), Router (`B2`).
-
----
-
-### 4. `Persona`
-Static or configured specification of an agent persona.
-
-| Field | Type | Description |
-|---|---|---|
-| `id` | `str` | Persona identifier (`coder`, `researcher`, `ops`, `writer`). |
-| `name` | `str` | Human-friendly name. |
-| `description` | `str` | Role description and responsibilities. |
-| `system_prompt` | `str` | System prompt instructions. |
-| `allowed_tools` | `List[str]` | Catalog of tools this persona is qualified to run. |
-| `default_autonomy` | `str` | Default autonomy baseline (`semi`, `full`, etc.). |
-| `metadata` | `Dict[str, Any]` | Model hints, temperature, parameters. |
-
-- **Producer**: Persona Registry (`C1`) (loaded from `config/personas/*.yaml`).
-- **Consumer**: Agent Runtime (`C2`).
-
----
-
 ### 5. `ToolSpec`
-Formal definition of an agent tool.
+Formal catalog specification of an agent tool.
 
 | Field | Type | Description |
 |---|---|---|
-| `name` | `str` | Unique tool name (`echo`, `git_commit`, etc.). |
-| `description` | `str` | Explanation of tool capability for LLM prompt. |
+| `name` | `str` | Unique tool name (`echo`, `github_pr`, `destructive_wipe`). |
+| `description` | `str` | Natural language explanation of tool capability. |
 | `parameters_schema` | `Dict[str, Any]` | JSON Schema for arguments. |
 | `return_schema` | `Dict[str, Any]` | JSON Schema for return value. |
 | `required_scopes` | `List[str]` | Required permissions/scopes. |
+| `destructive` | `bool` | If True, tool always requires explicit approval across all surfaces. |
+| `side_effects` | `SideEffects` | Side effect classification (`none`, `read`, `write`, `external`). |
+| `execution_target` | `ExecutionTarget` | Target environment (`local`, `remote`, `browser`). |
 
-- **Producers**: Tool implementers (`C4`).
-- **Consumers**: Tool Registry (`C3`), Tool Scope Enforcer (`C3`), Agent Runtime (`C2`).
+- **Producers**: Tool Implementers (`C4`).
+- **Consumers**: Tool Registry (`C3`), Tool Scope Enforcer (`C3`), Tool Executor (`C3`), Risk Classifier (`D1`).
 
 ---
 
-### 6. `ActionRequest`
-A proposed tool execution generated by the agent runtime.
+### 6. `ToolCall` & `ToolResult`
+Structured tool invocation and execution payloads.
+
+- `ToolCall`: `call_id: str`, `tool_name: str`, `arguments: Dict[str, Any]`
+- `ToolResult`: `call_id: str`, `tool_name: str`, `ok: bool`, `output: Any`, `error: Optional[str]`
+
+---
+
+### 7. `Response`
+End-to-end response delivered back to the calling surface adapter.
 
 | Field | Type | Description |
 |---|---|---|
-| `call_id` | `str` | Unique call identifier. |
-| `tool_name` | `str` | Target tool name. |
-| `arguments` | `Dict[str, Any]` | Tool call parameters. |
-| `caller_persona` | `str` | Persona initiating the action. |
-| `risk_assessment` | `Optional[str]` | Assessed risk score/tier. |
-
-- **Producer**: Agent Runtime (`C2`).
-- **Consumers**: Risk Classifier (`D1`), Approval Manager (`D2`), Tool Scope Enforcer (`C3`).
-
----
-
-### 7. `ApprovalRequest` & `ApprovalResponse`
-Human-in-the-loop and policy gate for risky actions.
-
-- **`ApprovalRequest`**: Contains `request_id`, `action: ActionRequest`, `risk_level`, `reason`, `required_role`.
-- **`ApprovalResponse`**: Contains `request_id`, `approved: bool`, `approver_id`, `feedback`, `timestamp`.
-- **Producers/Consumers**: Managed by Safety Approval (`D2`).
-
----
-
-### 8. `MemoryNode`
-Atomic unit of cross-surface episodic and semantic memory.
-
-| Field | Type | Description |
-|---|---|---|
-| `node_id` | `str` | Unique memory node ID. |
-| `user_id` | `str` | Canonical user ID. |
-| `surface` | `str` | Origin surface (`cli`, `slack`, etc.). |
-| `project_tag` | `Optional[str]` | Associated repository/workspace tag. |
-| `persona` | `str` | Persona involved in interaction. |
-| `summary` | `str` | Distilled fact or summary text. |
-| `embedding` | `Optional[List[float]]` | Vector embedding (e.g., 1536 dims). |
-| `timestamp` | `datetime` | Creation timestamp. |
-| `metadata` | `Dict[str, Any]` | Arbitrary provenance metadata. |
-
-- **Producer**: Memory Writer (`E2`).
-- **Consumers**: Memory Store (`E1`), Memory Retriever (`E3`), Router (`B2`).
-
----
-
-### 9. `Response`
-End-to-end response delivered to the user surface.
-
-| Field | Type | Description |
-|---|---|---|
-| `reply_text` | `str` | Primary agent message content. |
-| `persona_used` | `str` | Persona ID that generated the reply. |
-| `route_decision` | `RouteDecision` | The exact routing decision that was followed. |
-| `routing_explanation` | `str` | Human-facing transparency line (`Summoned <persona> because ...`). |
-| `session_id` | `str` | Conversation session ID. |
-| `timestamp` | `datetime` | Response timestamp. |
-| `metadata` | `Dict[str, Any]` | Tracing, telemetry, tokens. |
-
-- **Producer**: Orchestrator Pipeline (`apps/orchestrator`).
-- **Consumers**: Surface Adapters (`A1`, `A2`), Surface Clients.
+| `reply_text` | `str` | The primary textual response generated by the agent runtime. |
+| `persona_used` | `str` | Identifier of the persona that produced this response. |
+| `route_decision` | `RouteDecision` | The exact RouteDecision that guided execution. |
+| `routing_explanation` | `str` | Formatted transparency line (`Summoned <persona> because ...`). |
+| `session_id` | `str` | The session ID associated with this turn. |
+| `status` | `ResponseStatus` | Execution status: `complete`, `pending_approval`, `denied`, `error`. |
+| `pending_approval` | `Optional[ApprovalRequest]` | If pending approval, the approval workflow request object. |
+| `timestamp` | `datetime` | Timestamp when the response was generated. |
+| `metadata` | `Dict[str, Any]` | Structured response metrics. |

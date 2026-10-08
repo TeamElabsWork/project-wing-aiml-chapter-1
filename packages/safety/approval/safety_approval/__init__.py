@@ -1,5 +1,15 @@
 """Safety approval package."""
 
-from safety_approval.manager import ApprovalManager, AutoApproveStub
+from safety_approval.manager import (
+    ApprovalManager,
+    ApprovalManagerRegistry,
+    AutoApproveStub,
+    DenyAllApprovalStub,
+)
 
-__all__ = ["ApprovalManager", "AutoApproveStub"]
+__all__ = [
+    "ApprovalManager",
+    "ApprovalManagerRegistry",
+    "AutoApproveStub",
+    "DenyAllApprovalStub",
+]

@@ -5,7 +5,7 @@ Owner: E2
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Protocol
+from typing import Any, Callable, Dict, Protocol
 
 from contracts.models import MemoryNode, RequestEnvelope, RouteDecision
 from memory_store.base import MemoryRepository
@@ -14,7 +14,7 @@ from memory_store.base import MemoryRepository
 class MemoryWriter(Protocol):
     """Protocol for recording interaction turns into memory nodes."""
 
-    def write_interaction(
+    async def write_interaction(
         self,
         envelope: RequestEnvelope,
         decision: RouteDecision,
@@ -31,7 +31,7 @@ class StubMemoryWriter:
     def __init__(self, repository: MemoryRepository) -> None:
         self.repository = repository
 
-    def write_interaction(
+    async def write_interaction(
         self,
         envelope: RequestEnvelope,
         decision: RouteDecision,
@@ -56,5 +56,37 @@ class StubMemoryWriter:
                 **(extra_metadata or {}),
             },
         )
-        self.repository.save(node)
+        await self.repository.save(node)
         return node
+
+
+class MemoryWriterRegistry:
+    """Registry allowing memory writer implementations to be selected."""
+
+    _registry: Dict[str, Callable[..., MemoryWriter]] = {}
+
+    @classmethod
+    def register(cls, name: str, factory: Callable[..., MemoryWriter]) -> None:
+        cls._registry[name.lower()] = factory
+
+    @classmethod
+    def get(cls, name: str, **kwargs: Any) -> MemoryWriter:
+        lowered = name.lower()
+        if lowered not in cls._registry:
+            raise KeyError(
+                f"MemoryWriter '{name}' not found. Available writers: {list(cls._registry.keys())}"
+            )
+        return cls._registry[lowered](**kwargs)
+
+    @classmethod
+    def reset(cls) -> None:
+        cls._registry.clear()
+
+    @classmethod
+    def register_defaults(cls) -> None:
+        cls.register("stub", lambda **kwargs: StubMemoryWriter(**kwargs))
+        cls.register("default", lambda **kwargs: StubMemoryWriter(**kwargs))
+        cls.register("unset", lambda **kwargs: StubMemoryWriter(**kwargs))
+
+
+MemoryWriterRegistry.register_defaults()

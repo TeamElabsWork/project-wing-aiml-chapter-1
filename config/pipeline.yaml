@@ -1,0 +1,16 @@
+# Pipeline backend plugin slots.
+# Maps each pipeline component to a registered backend implementation.
+# Modules falling back to "unset" or "default" will log an informative warning
+# and use safe deterministic stub implementations until real implementations are wired.
+version: "1.0"
+
+backends:
+  router: "unset"            # e.g., "mock", "llm" (RouterRegistry)
+  runtime: "unset"           # e.g., "echo", "react" (RuntimeRegistry)
+  memory_store: "unset"      # e.g., "in_memory", "postgres" (MemoryStoreRegistry)
+  memory_writer: "unset"     # e.g., "stub", "llm" (MemoryWriterRegistry)
+  memory_retriever: "unset"  # e.g., "stub", "hybrid" (MemoryRetrieverRegistry)
+  session_manager: "unset"   # e.g., "in_memory", "redis" (SessionManagerRegistry)
+  risk_classifier: "unset"   # e.g., "rule_based", "llm" (RiskClassifierRegistry)
+  approval_manager: "unset"  # e.g., "stub", "deny_all", "slack" (ApprovalManagerRegistry)
+  embedding_provider: "unset"# e.g., "mock", "openai" (EmbeddingProviderRegistry)

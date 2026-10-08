@@ -3,15 +3,11 @@
 Owner: C3
 """
 
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, List, Optional
 
 from contracts.models import ToolSpec
 
-
-class ToolCallable(Protocol):
-    """Protocol for executable tool implementations."""
-
-    def __call__(self, **kwargs: Any) -> Any: ...
+ToolCallable = Callable[..., Any]
 
 
 class ToolRegistry:
@@ -36,3 +32,15 @@ class ToolRegistry:
     @classmethod
     def list_specs(cls) -> List[ToolSpec]:
         return list(cls._specs.values())
+
+    @classmethod
+    def reset(cls) -> None:
+        cls._tools.clear()
+        cls._specs.clear()
+
+    @classmethod
+    def register_defaults(cls) -> None:
+        try:
+            import personas_tools_impl  # noqa: F401
+        except ImportError:
+            pass

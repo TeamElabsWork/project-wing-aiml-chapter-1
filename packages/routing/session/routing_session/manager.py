@@ -4,21 +4,23 @@ Owner: B3
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol
+
+from contracts.models import SessionState
 
 
 class SessionManager(Protocol):
     """Protocol for persisting and retrieving active session interaction state."""
 
-    def get_session(self, session_id: str) -> Dict[str, Any]:
-        """Fetch session state dictionary by session ID."""
+    async def get_session(self, session_id: str) -> SessionState:
+        """Fetch session state by session ID."""
         ...
 
-    def update_session(self, session_id: str, updates: Dict[str, Any]) -> None:
+    async def update_session(self, session_id: str, updates: Dict[str, Any]) -> None:
         """Update arbitrary key-values on a session."""
         ...
 
-    def append_turn(
+    async def append_turn(
         self,
         session_id: str,
         user_text: str,
@@ -36,7 +38,7 @@ class InMemorySessionManager:
     def __init__(self) -> None:
         self._sessions: Dict[str, Dict[str, Any]] = {}
 
-    def get_session(self, session_id: str) -> Dict[str, Any]:
+    async def get_session(self, session_id: str) -> SessionState:
         # TODO (B3 Session Owner): Replace with Redis / database persistent store,
         # session windowing, and summarization triggers.
         if session_id not in self._sessions:
@@ -47,13 +49,25 @@ class InMemorySessionManager:
                 "active_persona": None,
                 "metadata": {},
             }
-        return self._sessions[session_id]
+        data = self._sessions[session_id]
+        return SessionState(
+            session_id=session_id,
+            history=list(data.get("history", [])),
+            active_persona=data.get("active_persona"),
+            metadata=dict(data.get("metadata", {})),
+        )
 
-    def update_session(self, session_id: str, updates: Dict[str, Any]) -> None:
-        sess = self.get_session(session_id)
-        sess.update(updates)
+    async def update_session(self, session_id: str, updates: Dict[str, Any]) -> None:
+        if session_id not in self._sessions:
+            await self.get_session(session_id)
+        sess = self._sessions[session_id]
+        if "metadata" in updates and isinstance(updates["metadata"], dict):
+            sess.setdefault("metadata", {}).update(updates["metadata"])
+        for k, v in updates.items():
+            if k != "metadata":
+                sess[k] = v
 
-    def append_turn(
+    async def append_turn(
         self,
         session_id: str,
         user_text: str,
@@ -61,7 +75,9 @@ class InMemorySessionManager:
         reply_text: str,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
-        sess = self.get_session(session_id)
+        if session_id not in self._sessions:
+            await self.get_session(session_id)
+        sess = self._sessions[session_id]
         sess["active_persona"] = persona
         history: List[Dict[str, Any]] = sess.setdefault("history", [])
         history.append(
@@ -73,3 +89,35 @@ class InMemorySessionManager:
                 "metadata": metadata or {},
             }
         )
+
+
+class SessionManagerRegistry:
+    """Registry allowing session manager implementations to be registered and selected via config."""
+
+    _registry: Dict[str, Callable[..., SessionManager]] = {}
+
+    @classmethod
+    def register(cls, name: str, factory: Callable[..., SessionManager]) -> None:
+        cls._registry[name.lower()] = factory
+
+    @classmethod
+    def get(cls, name: str, **kwargs: Any) -> SessionManager:
+        lowered = name.lower()
+        if lowered not in cls._registry:
+            raise KeyError(
+                f"SessionManager '{name}' not found in registry. Registered backends: {list(cls._registry.keys())}"
+            )
+        return cls._registry[lowered](**kwargs)
+
+    @classmethod
+    def reset(cls) -> None:
+        cls._registry.clear()
+
+    @classmethod
+    def register_defaults(cls) -> None:
+        cls.register("in_memory", lambda **kwargs: InMemorySessionManager())
+        cls.register("default", lambda **kwargs: InMemorySessionManager())
+
+
+# Register defaults
+SessionManagerRegistry.register_defaults()

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "api"
+version = "0.2.0"
+description = "FastAPI HTTP Ingress service for Surface-Aware Agent Orchestration"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.28.0",
+    "pydantic>=2.6.0",
+    "contracts",
+    "orchestrator",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["api"]

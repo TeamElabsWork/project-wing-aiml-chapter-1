@@ -7,13 +7,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol
 
 import yaml
-from contracts.models import SurfaceContext
+from contracts.models import Autonomy, PolicyEvaluation, SurfaceContext, UrgencyLevel
 
 
 class SurfacePolicyProtocol(Protocol):
     """Protocol for checking surface-specific constraints and urgency."""
 
-    def evaluate(self, surface_ctx: SurfaceContext, text: str) -> Dict[str, Any]:
+    def evaluate(self, surface_ctx: SurfaceContext, text: str) -> PolicyEvaluation:
         """Evaluate surface policy for the given surface context and message text."""
         ...
 
@@ -53,9 +53,16 @@ class SurfacePolicyEngine:
                     "urgency_keywords": ["p0", "p1", "incident", "outage"],
                     "max_tokens_budget": 2048,
                 },
+                "web": {
+                    "interactive": True,
+                    "supports_markdown": True,
+                    "default_autonomy": "semi",
+                    "urgency_keywords": ["urgent"],
+                    "max_tokens_budget": 4096,
+                },
             }
 
-    def evaluate(self, surface_ctx: SurfaceContext, text: str) -> Dict[str, Any]:
+    def evaluate(self, surface_ctx: SurfaceContext, text: str) -> PolicyEvaluation:
         # TODO (B1 Surface Policy Owner): Expand with time-of-day policies,
         # role-based urgency escalations, and multi-tenant quotas.
         stype = surface_ctx.surface_type.lower()
@@ -67,19 +74,28 @@ class SurfacePolicyEngine:
             surface_ctx.urgency_hint in ("high", "urgent")
         )
 
-        default_autonomy = surface_def.get("default_autonomy", "semi")
-        # In emergency/high-urgency cases, autonomy might escalate or restrict depending on policy
-        assigned_autonomy = (
+        urgency: UrgencyLevel = "high" if is_urgent else (surface_ctx.urgency_hint or "normal")
+        raw_autonomy = surface_def.get("default_autonomy", "semi")
+        valid_autonomies: tuple[Autonomy, ...] = ("full", "semi", "read_only", "supervised")
+        default_autonomy: Autonomy = raw_autonomy if raw_autonomy in valid_autonomies else "semi"
+
+        # In emergency/high-urgency cases on mobile/chat, autonomy might be restricted to supervised
+        assigned_autonomy: Autonomy = (
             "supervised" if (is_urgent and stype == "telegram") else default_autonomy
         )
+        supports_markdown: bool = bool(
+            surface_def.get("supports_markdown", surface_ctx.supports_markdown)
+        )
+        max_tokens_budget: int = int(surface_def.get("max_tokens_budget", 2048))
 
-        return {
-            "surface_type": stype,
-            "is_urgent": is_urgent,
-            "autonomy_recommendation": assigned_autonomy,
-            "supports_markdown": surface_def.get(
-                "supports_markdown", surface_ctx.supports_markdown
-            ),
-            "max_tokens_budget": surface_def.get("max_tokens_budget", 2048),
-            "urgency_score": 0.9 if is_urgent else 0.1,
-        }
+        return PolicyEvaluation(
+            is_urgent=is_urgent,
+            urgency=urgency,
+            default_autonomy=assigned_autonomy,
+            max_tokens_budget=max_tokens_budget,
+            supports_markdown=supports_markdown,
+            extras={
+                "surface_type": stype,
+                "urgency_score": 0.9 if is_urgent else 0.1,
+            },
+        )

@@ -3,6 +3,7 @@
 Owner: A2
 """
 
+import asyncio
 import sys
 import uuid
 from typing import Any, Protocol
@@ -13,7 +14,7 @@ from contracts.models import Response
 class PipelineRunner(Protocol):
     """Protocol representing the orchestrator pipeline execution entry point."""
 
-    def process(
+    async def process(
         self,
         raw_input: Any,
         surface_type: str = "cli",
@@ -29,14 +30,25 @@ class CLIAdapter:
         self.pipeline = pipeline
         self.session_id = f"cli-session-{uuid.uuid4().hex[:6]}"
 
-    def send_message(self, text: str) -> Response:
-        """Send a single message to the pipeline."""
-        return self.pipeline.process(
+    async def send_message_async(self, text: str) -> Response:
+        """Send a single message to the pipeline asynchronously."""
+        return await self.pipeline.process(
             raw_input=text,
             surface_type="cli",
             external_user_id="local-developer",
             session_id=self.session_id,
         )
+
+    def send_message(self, text: str) -> Response:
+        """Send a single message using asyncio.run at the REPL edge."""
+        try:
+            asyncio.get_running_loop()
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                return executor.submit(lambda: asyncio.run(self.send_message_async(text))).result()
+        except RuntimeError:
+            return asyncio.run(self.send_message_async(text))
 
     def run_repl(self) -> None:
         """Run the interactive console REPL."""

@@ -5,17 +5,23 @@ Owner: B2
 
 from typing import Any, Callable, Dict, List, Protocol
 
-from contracts.models import MemoryNode, RequestEnvelope, RouteDecision
+from contracts.models import (
+    MemoryNode,
+    PolicyEvaluation,
+    RequestEnvelope,
+    RouteDecision,
+    SessionState,
+)
 
 
 class Router(Protocol):
     """Protocol implemented by routing engines (LLM-based, heuristic, or hybrid)."""
 
-    def route(
+    async def route(
         self,
         envelope: RequestEnvelope,
-        session_state: Dict[str, Any],
-        surface_policy: Dict[str, Any],
+        session_state: SessionState,
+        surface_policy: PolicyEvaluation,
         memory_context: List[MemoryNode],
     ) -> RouteDecision:
         """Analyze context and make a RouteDecision."""
@@ -43,3 +49,14 @@ class RouterRegistry:
     @classmethod
     def list_available(cls) -> List[str]:
         return list(cls._registry.keys())
+
+    @classmethod
+    def reset(cls) -> None:
+        cls._registry.clear()
+
+    @classmethod
+    def register_defaults(cls) -> None:
+        from routing_router.mock_router import MockRouter
+
+        cls.register("mock", lambda **kwargs: MockRouter(**kwargs))
+        cls.register("default", lambda **kwargs: MockRouter(**kwargs))

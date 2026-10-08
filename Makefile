@@ -1,4 +1,4 @@
-.PHONY: help setup test lint format check demo evals up down clean
+.PHONY: help setup test lint format check demo evals api up down clean
 
 PYTHON ?= python
 UV ?= uv
@@ -13,6 +13,7 @@ help:
 	@echo "  make check    Run formatting, linting, and tests"
 	@echo "  make demo     Launch the interactive CLI demo REPL"
 	@echo "  make evals    Run the routing evaluation harness against configured router"
+	@echo "  make api      Start the FastAPI HTTP ingress service on port 8000"
 	@echo "  make up       Start Postgres+pgvector docker container (optional)"
 	@echo "  make down     Stop docker containers (optional)"
 	@echo "  make clean    Remove caches and temporary artifacts"
@@ -37,6 +38,9 @@ demo:
 
 evals:
 	$(UV) run $(PYTHON) -m evals.runner
+
+api:
+	$(UV) run uvicorn api.main:app --reload --port 8000
 
 up:
 	docker compose -f infra/docker-compose.yml up -d

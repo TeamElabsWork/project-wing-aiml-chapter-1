@@ -1,4 +1,4 @@
-# Model configuration slots for Router and Persona Runtime Execution
+# Model configuration slots for Router, Persona Runtime Execution, and Embeddings
 # Keep provider as "unset" until the team decides on an LLM vendor.
 version: "1.0"
 
@@ -19,3 +19,9 @@ executor:
   max_tokens: 4096
   timeout_seconds: 60
   fallback_strategy: "retry"
+
+embedding:
+  # Model slot for dense vector representations of memory and interactions
+  provider: "unset"  # e.g., "openai", "voyage", "fastembed", "mock"
+  model_name: "unset" # e.g., "text-embedding-3-small"
+  dimensions: 1536

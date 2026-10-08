@@ -18,7 +18,7 @@ class MockLLMProvider:
     def __init__(self, canned_response: str | None = None) -> None:
         self.canned_response = canned_response
 
-    def complete(
+    async def complete(
         self,
         prompt: str,
         system: str = "",
@@ -32,7 +32,7 @@ class MockLLMProvider:
             return self.canned_response
         return f"[MockLLM Complete]: Processed prompt of length {len(prompt)} with system prompt '{system[:30]}'."
 
-    def structured(
+    async def structured(
         self,
         prompt: str,
         schema: Type[T] | Dict[str, Any],
@@ -42,7 +42,6 @@ class MockLLMProvider:
     ) -> Any:
         # TODO (C2 Runtime Owner): Implement JSON schema enforcement / tool calling schemas.
         if isinstance(schema, type) and issubclass(schema, BaseModel):
-            # Attempt to construct default model instance if possible
             try:
                 return schema()
             except Exception:
@@ -50,5 +49,4 @@ class MockLLMProvider:
         return {"result": f"[MockLLM Structured]: Generated for schema {schema}"}
 
 
-LLMProviderRegistry.register("mock", lambda **kwargs: MockLLMProvider(**kwargs))
-LLMProviderRegistry.register("unset", lambda **kwargs: MockLLMProvider(**kwargs))
+LLMProviderRegistry.register_defaults()

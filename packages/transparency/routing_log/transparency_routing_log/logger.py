@@ -23,6 +23,10 @@ class RoutingLoggerProtocol(Protocol):
         """Produce structured dictionary suitable for JSON logging."""
         ...
 
+    def emit_log(self, decision: RouteDecision, extra: Dict[str, Any] | None = None) -> str:
+        """Returns JSON string for structured logging sinks."""
+        ...
+
 
 class RoutingLogger:
     """Renders human-facing 'Summoned <persona> because ...' line and structured logs."""

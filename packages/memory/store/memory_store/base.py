@@ -11,25 +11,27 @@ from contracts.models import MemoryNode
 class MemoryRepository(Protocol):
     """Protocol for persisting and querying cross-surface MemoryNode entities."""
 
-    def save(self, node: MemoryNode) -> None:
+    async def save(self, node: MemoryNode) -> None:
         """Persist a memory node."""
         ...
 
-    def search(
+    async def search(
         self,
         query: str,
         user_id: Optional[str] = None,
         surface: Optional[str] = None,
         limit: int = 5,
+        query_embedding: Optional[List[float]] = None,
+        project_tag: Optional[str] = None,
     ) -> List[MemoryNode]:
         """Search memory nodes matching query keywords or similarity."""
         ...
 
-    def get_by_id(self, node_id: str) -> Optional[MemoryNode]:
+    async def get_by_id(self, node_id: str) -> Optional[MemoryNode]:
         """Fetch a specific node by its ID."""
         ...
 
-    def list_all(self, user_id: Optional[str] = None) -> List[MemoryNode]:
+    async def list_all(self, user_id: Optional[str] = None) -> List[MemoryNode]:
         """List all stored memory nodes, optionally filtered by user."""
         ...
 
@@ -51,3 +53,15 @@ class MemoryStoreRegistry:
                 f"Memory store backend '{name}' not found. Available backends: {list(cls._registry.keys())}"
             )
         return cls._registry[lowered](**kwargs)
+
+    @classmethod
+    def reset(cls) -> None:
+        cls._registry.clear()
+
+    @classmethod
+    def register_defaults(cls) -> None:
+        from memory_store.in_memory import InMemoryMemoryRepository
+
+        cls.register("in_memory", lambda **kwargs: InMemoryMemoryRepository())
+        cls.register("default", lambda **kwargs: InMemoryMemoryRepository())
+        cls.register("unset", lambda **kwargs: InMemoryMemoryRepository())

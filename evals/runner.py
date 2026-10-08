@@ -3,19 +3,22 @@
 Owner: F2
 """
 
+import asyncio
 from pathlib import Path
 from typing import Any, Dict, List
 
 import yaml
-from contracts.models import RequestEnvelope, RouteDecision, SurfaceContext
+from contracts.models import RequestEnvelope, RouteDecision, SessionState, SurfaceContext
 from routing_router.base import Router
 from routing_router.mock_router import MockRouter
+from routing_surface_policy.policy import SurfacePolicyEngine
 
 
-def run_evals(router: Router, cases_path: Path | str = "evals/cases.yaml") -> Dict[str, Any]:
-    """Execute evaluation cases against the provided router and return results."""
-    # TODO (F2 Evals Owner): Add semantic similarity matching for reasoning explanations,
-    # latency benchmarking, and confusion matrix generation.
+async def run_evals_async(
+    router: Router,
+    cases_path: Path | str = "evals/cases.yaml",
+) -> Dict[str, Any]:
+    """Execute evaluation cases against the provided router asynchronously."""
     path = Path(cases_path)
     if not path.exists():
         raise FileNotFoundError(f"Evaluation cases file not found: {path}")
@@ -26,6 +29,7 @@ def run_evals(router: Router, cases_path: Path | str = "evals/cases.yaml") -> Di
     cases: List[Dict[str, Any]] = data.get("cases", [])
     results: List[Dict[str, Any]] = []
     persona_matches = 0
+    policy_engine = SurfacePolicyEngine()
 
     for c in cases:
         case_id = c["id"]
@@ -48,10 +52,13 @@ def run_evals(router: Router, cases_path: Path | str = "evals/cases.yaml") -> Di
             surface_context=surface_ctx,
         )
 
-        decision: RouteDecision = router.route(
+        policy_eval = policy_engine.evaluate(surface_ctx, input_text)
+        session_state = SessionState(session_id=envelope.session_id, history=[])
+
+        decision: RouteDecision = await router.route(
             envelope=envelope,
-            session_state={},
-            surface_policy={"is_urgent": "urgent" in input_text.lower()},
+            session_state=session_state,
+            surface_policy=policy_eval,
             memory_context=[],
         )
 
@@ -81,6 +88,11 @@ def run_evals(router: Router, cases_path: Path | str = "evals/cases.yaml") -> Di
         "accuracy": accuracy,
         "case_results": results,
     }
+
+
+def run_evals(router: Router, cases_path: Path | str = "evals/cases.yaml") -> Dict[str, Any]:
+    """Synchronous wrapper for run_evals_async using asyncio.run."""
+    return asyncio.run(run_evals_async(router=router, cases_path=cases_path))
 
 
 def main() -> None:

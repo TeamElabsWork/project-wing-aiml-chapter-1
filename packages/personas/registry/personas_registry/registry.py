@@ -93,3 +93,9 @@ class PersonaRegistry:
 
     def list_all(self) -> List[Persona]:
         return list(self._personas.values())
+
+    def reset(self) -> None:
+        self._personas.clear()
+
+    def register_defaults(self) -> None:
+        self._register_default_placeholders()
