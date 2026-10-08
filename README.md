@@ -102,9 +102,18 @@ CODEOWNERS, Makefile, pyproject.toml (workspace), .pre-commit-config.yaml, READM
 
 ---
 
-## Development Documentation
+## Development & Contributing Documentation
 
-- [Architecture Overview](docs/architecture.md)
-- [Contracts Reference](docs/contracts.md)
-- [How to Add or Implement a Module](docs/adding-a-module.md)
-- [Architecture Decision Records (ADRs)](docs/decisions/)
+- [Contributing Guidelines](CONTRIBUTING.md) — Issue difficulty tiers, branch standards, and PR checklist
+- [Architecture Overview](docs/architecture.md) — System flow, request lifecycle, and component interaction
+- [Contracts Reference](docs/contracts.md) — Detailed schema reference for every Pydantic contract
+- [How to Add or Implement a Module](docs/adding-a-module.md) — Guide for building behind interfaces
+- [Architecture Decision Records (ADRs)](docs/decisions/):
+  - [ADR-001: Central Contracts Package](docs/decisions/ADR-001-contracts-package.md)
+  - [ADR-002: In-Memory Component Registries](docs/decisions/ADR-002-pluggable-registry-pattern.md)
+  - [ADR-003: Vendor-Agnostic LLM Provider Protocol](docs/decisions/ADR-003-llm-provider-abstraction.md)
+  - [ADR-004: Dual In-Memory and pgvector Memory Backend](docs/decisions/ADR-004-memory-and-pgvector-schema.md)
+  - [ADR-005: Gateway Normalization & Surface Context](docs/decisions/ADR-005-surface-normalization.md)
+  - [ADR-006: Code Execution Model & Remote Actions (GitHub PRs vs Local CLI)](docs/decisions/ADR-006-execution-model-and-remote-actions.md)
+  - [ADR-007: PostgreSQL + pgvector for Unified Memory Storage](docs/decisions/ADR-007-postgres-pgvector-for-memory-storage.md)
+  - [ADR-008: Production Hosting & Process Lifecycle Management](docs/decisions/ADR-008-hosting-and-production-lifecycle.md)

@@ -986,7 +986,7 @@ dependencies = [
     { name = "transparency-routing-log" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "mypy" },
     { name = "pre-commit" },
@@ -1005,28 +1005,31 @@ requires-dist = [
     { name = "memory-retriever", editable = "packages/memory/retriever" },
     { name = "memory-store", editable = "packages/memory/store" },
     { name = "memory-writer", editable = "packages/memory/writer" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.9.0" },
     { name = "orchestrator", editable = "apps/orchestrator" },
     { name = "personas-registry", editable = "packages/personas/registry" },
     { name = "personas-runtime", editable = "packages/personas/runtime" },
     { name = "personas-tools-core", editable = "packages/personas/tools_core" },
     { name = "personas-tools-impl", editable = "packages/personas/tools_impl" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.7.0" },
     { name = "pydantic", specifier = ">=2.6.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "routing-router", editable = "packages/routing/router" },
     { name = "routing-session", editable = "packages/routing/session" },
     { name = "routing-surface-policy", editable = "packages/routing/surface_policy" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4.0" },
     { name = "safety-approval", editable = "packages/safety/approval" },
     { name = "safety-risk-classifier", editable = "packages/safety/risk_classifier" },
     { name = "surface-cli", editable = "packages/surfaces/cli" },
     { name = "surfaces-telegram-slack", editable = "packages/surfaces/telegram_slack" },
     { name = "transparency-routing-log", editable = "packages/transparency/routing_log" },
-    { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.12" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = ">=1.9.0" },
+    { name = "pre-commit", specifier = ">=3.7.0" },
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "ruff", specifier = ">=0.4.0" },
+    { name = "types-pyyaml", specifier = ">=6.0.12" },
+]
 
 [[package]]
 name = "surface-cli"

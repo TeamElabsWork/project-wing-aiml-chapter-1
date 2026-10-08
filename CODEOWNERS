@@ -1,6 +1,12 @@
 # Surface-Aware Agent Orchestration Code Ownership
 # Team of 8 parallel module ownership assignments.
-
+#
+# HOW TO USE THIS FILE:
+# 1. Replace the placeholder handles (e.g. `@owner-router`) with your real GitHub username (e.g. `@johndoe`).
+# 2. Once configured, GitHub will AUTOMATICALLY:
+#    - Request your review whenever someone opens a PR touching your package.
+#    - Require your sign-off before changes to /packages/contracts/ can be merged.
+#
 # IMPORTANT:
 # Schema changes in /packages/contracts affect all modules and require review
 # from the lead orchestrator and dependent module owners before merging!
