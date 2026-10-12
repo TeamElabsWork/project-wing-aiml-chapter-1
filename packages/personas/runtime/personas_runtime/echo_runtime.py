@@ -8,10 +8,12 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from contracts.models import (
     ActionRequest,
     ApprovalRequest,
+    ContextBundle,
     Persona,
     RequestEnvelope,
     RouteDecision,
     RuntimeResult,
+    TokenUsage,
     ToolCall,
     ToolResult,
 )
@@ -27,23 +29,46 @@ class EchoRuntime:
         persona: Persona,
         session_history: Optional[List[Dict[str, Any]]] = None,
         tool_executor: Optional[Any] = None,
+        context: Optional[ContextBundle] = None,
         **kwargs: Any,
     ) -> RuntimeResult:
         # TODO (C2 Runtime Owner): Implement actual multi-step ReAct or plan-execute loop,
         # integrating with ToolRegistry and LLMProvider.
-        history_count = len(session_history) if session_history else 0
+        if context is not None:
+            history_count = len(context.history)
+            memory_count = len(context.memory)
+            budget = context.token_budget
+            context_line = f"(context: {history_count} history, {memory_count} memory nodes, budget {budget} tokens)"
+        else:
+            history_count = len(session_history) if session_history else 0
+            context_line = (
+                f"(Context: {history_count} previous turn(s) in session {envelope.session_id})"
+            )
+
         surface_type = envelope.surface_context.surface_type
 
         reply_text = (
             f"[{persona.name} | Surface: {surface_type} | Autonomy: {decision.autonomy}]\n"
             f'Acknowledged request: "{envelope.raw_text}"\n'
-            f"(Context: {history_count} previous turn(s) in session {envelope.session_id})"
+            f"{context_line}"
         )
+
+        prompt_text = envelope.raw_text + (context.persona_prompt if context else "")
+        prompt_tokens = len(prompt_text) // 4
+        completion_tokens = len(reply_text) // 4
+        usage = TokenUsage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            estimated=True,
+        )
+
         return RuntimeResult(
             reply_text=reply_text,
             tool_results=[],
             pending_approval=None,
             error=None,
+            usage=usage,
         )
 
     async def stream(
@@ -53,6 +78,7 @@ class EchoRuntime:
         persona: Persona,
         session_history: Optional[List[Dict[str, Any]]] = None,
         tool_executor: Optional[Any] = None,
+        context: Optional[ContextBundle] = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         """Stream echo response in chunked tokens."""
@@ -62,6 +88,7 @@ class EchoRuntime:
             persona=persona,
             session_history=session_history,
             tool_executor=tool_executor,
+            context=context,
             **kwargs,
         )
         words = res.reply_text.split(" ")
@@ -79,6 +106,7 @@ class ScriptedRuntime:
         persona: Persona,
         session_history: Optional[List[Dict[str, Any]]] = None,
         tool_executor: Optional[Any] = None,
+        context: Optional[ContextBundle] = None,
         **kwargs: Any,
     ) -> RuntimeResult:
         raw_lower = envelope.raw_text.lower()
@@ -144,11 +172,22 @@ class ScriptedRuntime:
             f"Result: {tool_result_str}"
         )
 
+        prompt_text = envelope.raw_text + (context.persona_prompt if context else "")
+        prompt_tokens = len(prompt_text) // 4
+        completion_tokens = len(reply_text) // 4
+        usage = TokenUsage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            estimated=True,
+        )
+
         return RuntimeResult(
             reply_text=reply_text,
             tool_results=tool_results,
             pending_approval=pending_approval,
             error=None,
+            usage=usage,
         )
 
     async def stream(
@@ -158,6 +197,7 @@ class ScriptedRuntime:
         persona: Persona,
         session_history: Optional[List[Dict[str, Any]]] = None,
         tool_executor: Optional[Any] = None,
+        context: Optional[ContextBundle] = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         res = await self.execute(
@@ -166,6 +206,7 @@ class ScriptedRuntime:
             persona=persona,
             session_history=session_history,
             tool_executor=tool_executor,
+            context=context,
             **kwargs,
         )
         for chunk in res.reply_text.splitlines(keepends=True):

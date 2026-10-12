@@ -28,6 +28,7 @@
 # Personas, Runtime & Tools (C1, C2, C3, C4)
 /packages/personas/registry/        @owner-persona-registry
 /packages/personas/runtime/         @owner-runtime
+/packages/personas/context_builder/ @owner-runtime @owner-memory-retriever
 /packages/personas/tools_core/      @owner-tools-core
 /packages/personas/tools_impl/      @owner-tools-impl
 

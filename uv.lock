@@ -17,6 +17,7 @@ members = [
     "memory-store",
     "memory-writer",
     "orchestrator",
+    "personas-context-builder",
     "personas-registry",
     "personas-runtime",
     "personas-tools-core",
@@ -186,7 +187,7 @@ wheels = [
 
 [[package]]
 name = "contracts"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "packages/contracts" }
 dependencies = [
     { name = "pydantic" },
@@ -210,6 +211,8 @@ version = "0.1.0"
 source = { editable = "evals" }
 dependencies = [
     { name = "contracts" },
+    { name = "personas-context-builder" },
+    { name = "personas-registry" },
     { name = "pyyaml" },
     { name = "routing-router" },
 ]
@@ -217,6 +220,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "contracts", editable = "packages/contracts" },
+    { name = "personas-context-builder", editable = "packages/personas/context_builder" },
+    { name = "personas-registry", editable = "packages/personas/registry" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "routing-router", editable = "packages/routing/router" },
 ]
@@ -591,6 +596,7 @@ dependencies = [
     { name = "memory-retriever" },
     { name = "memory-store" },
     { name = "memory-writer" },
+    { name = "personas-context-builder" },
     { name = "personas-registry" },
     { name = "personas-runtime" },
     { name = "personas-tools-core" },
@@ -611,6 +617,7 @@ requires-dist = [
     { name = "memory-retriever", editable = "packages/memory/retriever" },
     { name = "memory-store", editable = "packages/memory/store" },
     { name = "memory-writer", editable = "packages/memory/writer" },
+    { name = "personas-context-builder", editable = "packages/personas/context_builder" },
     { name = "personas-registry", editable = "packages/personas/registry" },
     { name = "personas-runtime", editable = "packages/personas/runtime" },
     { name = "personas-tools-core", editable = "packages/personas/tools_core" },
@@ -640,6 +647,17 @@ sdist = { url = "https://files.pythonhosted.org/packages/5a/82/42f767fc1c1143d6f
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl", hash = "sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189", size = 57328, upload-time = "2026-04-27T01:46:07.06Z" },
 ]
+
+[[package]]
+name = "personas-context-builder"
+version = "0.1.0"
+source = { editable = "packages/personas/context_builder" }
+dependencies = [
+    { name = "contracts" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "contracts", editable = "packages/contracts" }]
 
 [[package]]
 name = "personas-registry"
@@ -1061,6 +1079,7 @@ dependencies = [
     { name = "memory-store" },
     { name = "memory-writer" },
     { name = "orchestrator" },
+    { name = "personas-context-builder" },
     { name = "personas-registry" },
     { name = "personas-runtime" },
     { name = "personas-tools-core" },
@@ -1101,6 +1120,7 @@ requires-dist = [
     { name = "memory-store", editable = "packages/memory/store" },
     { name = "memory-writer", editable = "packages/memory/writer" },
     { name = "orchestrator", editable = "apps/orchestrator" },
+    { name = "personas-context-builder", editable = "packages/personas/context_builder" },
     { name = "personas-registry", editable = "packages/personas/registry" },
     { name = "personas-runtime", editable = "packages/personas/runtime" },
     { name = "personas-tools-core", editable = "packages/personas/tools_core" },

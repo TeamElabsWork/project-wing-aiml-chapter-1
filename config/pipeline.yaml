@@ -7,6 +7,7 @@ version: "1.0"
 backends:
   router: "unset"            # e.g., "mock", "llm" (RouterRegistry)
   runtime: "unset"           # e.g., "echo", "react", "scripted" (RuntimeRegistry)
+  context_builder: "unset"   # e.g., "passthrough", "default" (ContextBuilderRegistry)
   identity_resolver: "unset" # e.g., "in_memory" (IdentityResolverRegistry)
   surface_policy: "unset"    # e.g., "yaml" (SurfacePolicyRegistry)
   memory_store: "unset"      # e.g., "in_memory", "postgres" (MemoryStoreRegistry)
@@ -16,3 +17,7 @@ backends:
   risk_classifier: "unset"   # e.g., "rule_based", "llm" (RiskClassifierRegistry)
   approval_manager: "unset"  # e.g., "auto_approve", "deny_all", "pending" (ApprovalManagerRegistry)
   embedding_provider: "unset"# e.g., "mock", "openai" (EmbeddingProviderRegistry)
+
+limits:
+  memory_retrieval_limit: 3  # Default limit of memory nodes retrieved per interaction turn
+

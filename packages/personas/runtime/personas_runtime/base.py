@@ -15,7 +15,14 @@ from typing import (
     TypeVar,
 )
 
-from contracts.models import Persona, RequestEnvelope, RouteDecision, RuntimeResult
+from contracts.models import (
+    ContextBundle,
+    LLMResponse,
+    Persona,
+    RequestEnvelope,
+    RouteDecision,
+    RuntimeResult,
+)
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
@@ -31,7 +38,7 @@ class LLMProvider(Protocol):
         temperature: float = 0.7,
         max_tokens: int = 2048,
         **kwargs: Any,
-    ) -> str:
+    ) -> LLMResponse:
         """Execute a text completion prompt."""
         ...
 
@@ -42,7 +49,7 @@ class LLMProvider(Protocol):
         system: str = "",
         temperature: float = 0.0,
         **kwargs: Any,
-    ) -> Any:
+    ) -> LLMResponse:
         """Execute structured JSON completion adhering to a Pydantic model or schema."""
         ...
 
@@ -57,9 +64,13 @@ class AgentRuntime(Protocol):
         persona: Persona,
         session_history: Optional[List[Dict[str, Any]]] = None,
         tool_executor: Optional[Any] = None,
+        context: Optional[ContextBundle] = None,
         **kwargs: Any,
     ) -> RuntimeResult:
-        """Run the persona loop and produce structured RuntimeResult."""
+        """Run the persona loop and produce structured RuntimeResult.
+
+        Note: session_history is deprecated in favor of context.history in context.
+        """
         ...
 
     def stream(
@@ -69,9 +80,13 @@ class AgentRuntime(Protocol):
         persona: Persona,
         session_history: Optional[List[Dict[str, Any]]] = None,
         tool_executor: Optional[Any] = None,
+        context: Optional[ContextBundle] = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
-        """Stream response tokens as an asynchronous iterator."""
+        """Stream response tokens as an asynchronous iterator.
+
+        Note: session_history is deprecated in favor of context.history in context.
+        """
         ...
 
 

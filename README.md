@@ -86,7 +86,7 @@ make evals
 
 ```text
 /packages
-  /contracts            shared Pydantic schemas v0.2.0 (the ONLY thing every module may import)
+  /contracts            shared Pydantic schemas v0.3.0 (the ONLY thing every module may import)
   /surfaces
     /telegram_slack     A1  chat adapter (stub)
     /cli                A2  CLI adapter (working REPL with /approve and /deny commands)
@@ -99,6 +99,7 @@ make evals
   /personas
     /registry           C1  loads persona YAML files; includes 4 personas (coder, researcher, ops, writer)
     /runtime            C2  async agent runtime interface + EchoRuntime + ScriptedRuntime + MockLLMProvider
+    /context_builder    C2/E3 context assembly + token budget (ContextBundle, PassthroughContextBuilder)
     /tools_core         C3  ToolSpec, ToolRegistry, ToolScopeEnforcer, ToolExecutor with safety gating
     /tools_impl         C4  example tools: echo, github_pr (remote), destructive_wipe (destructive)
   /safety
@@ -109,14 +110,14 @@ make evals
     /writer             E2  async MemoryWriter interface + stub
     /retriever          E3  async MemoryRetriever interface + stub
   /transparency
-    /routing_log        F1  renders "Summoned <persona> because ..." + structured log
+    /routing_log        F1  renders "Summoned <persona> because ..." + structured log with TokenUsage
 /apps
   /orchestrator         wires everything together asynchronously; pipeline factory from config
   /api                  FastAPI ingress with /healthz, /v1/message, /v1/stream (SSE), webhooks, and IdempotencyStore
-/evals                  F2  routing benchmark harness: cases.yaml + async runner
+/evals                  F2  routing benchmark harness: cases.yaml + async runner with token estimation
 /infra                  F3  docker-compose.yml (postgres+pgvector reference), Dockerfile, .env.example
 /config                 surfaces.yaml, personas/*.yaml, models.yaml, pipeline.yaml
-/docs                   architecture.md, contracts.md, adding-a-module.md, decisions/ (ADRs 001-011)
+/docs                   architecture.md, contracts.md, adding-a-module.md, decisions/ (ADRs 001-012)
 CODEOWNERS, Makefile, pyproject.toml (workspace), .pre-commit-config.yaml, README.md
 ```
 
@@ -125,11 +126,12 @@ CODEOWNERS, Makefile, pyproject.toml (workspace), .pre-commit-config.yaml, READM
 ## Core Architecture Principles
 
 1. **Contracts First**: All shared types live in `packages/contracts/`. Modules depend **only** on `/contracts` and on interfaces (Python `Protocol`s), never on another module's concrete implementation.
-2. **Async-First Protocols**: All I/O-bound protocol methods (Router, Runtime, Memory, Session, Approval, Pipeline) are `async def` (ADR-009). Pure evaluation logic (SurfacePolicy, ToolScopeEnforcer, RiskClassifier) remains synchronous.
-3. **Pluggable Registries**: Adapters, tools, personas, router engines, runtimes, memory stores, and approval managers register themselves into lightweight registries (`RouterRegistry`, `RuntimeRegistry`, `ToolRegistry`, `MemoryStoreRegistry`, `ApprovalManagerRegistry`) and are selected via `config/pipeline.yaml` and `config/models.yaml`.
+2. **Async-First Protocols**: All I/O-bound protocol methods (Router, Runtime, ContextBuilder, Memory, Session, Approval, Pipeline) are `async def` (ADR-009). Pure evaluation logic (SurfacePolicy, ToolScopeEnforcer, RiskClassifier) remains synchronous.
+3. **Pluggable Registries**: Adapters, tools, personas, router engines, runtimes, context builders, memory stores, and approval managers register themselves into lightweight registries (`RouterRegistry`, `RuntimeRegistry`, `ContextBuilderRegistry`, `ToolRegistry`, `MemoryStoreRegistry`, `ApprovalManagerRegistry`) and are selected via `config/pipeline.yaml` and `config/models.yaml`.
 4. **Safety Gating & Deferred Execution**: Destructive actions (`ToolSpec.destructive = True`) unconditionally require explicit approval across all surfaces. Gated calls pause with `pending_approval` until reviewed via CLI or API (ADR-010).
-5. **Vendor Agnostic**: Zero hardcoded vendor SDK dependencies. The LLM and embedding provider protocols ship with deterministic mock providers, leaving model slots configured as `unset` in `config/models.yaml`.
-6. **Day-1 Execution Without Docker**: The default setup runs entirely in-memory using pure Python. Postgres + pgvector migrations and Docker definitions are provided in `/infra` for future deployment (ADR-011).
+5. **Context Assembly & Token Accounting**: Requests pass through `ContextBuilder` (`C2`/`E3`) to compile prompt instructions, multi-turn history, retrieved memories, permitted tool scopes, and surface token budgets into typed `ContextBundle` contracts before runtime execution (ADR-012).
+6. **Vendor Agnostic**: Zero hardcoded vendor SDK dependencies. The LLM and embedding provider protocols ship with deterministic mock providers, leaving model slots configured as `unset` in `config/models.yaml`.
+7. **Day-1 Execution Without Docker**: The default setup runs entirely in-memory using pure Python. Postgres + pgvector migrations and Docker definitions are provided in `/infra` for future deployment (ADR-011).
 
 ---
 
@@ -151,3 +153,4 @@ CODEOWNERS, Makefile, pyproject.toml (workspace), .pre-commit-config.yaml, READM
   - [ADR-009: Async-First Protocols for I/O Boundaries](docs/decisions/ADR-009-async-first-protocols.md)
   - [ADR-010: Deferred Tool Execution on Approval](docs/decisions/ADR-010-deferred-tool-execution-on-approval.md)
   - [ADR-011: Unified Memory Schema and Dynamic Vector Dimensions](docs/decisions/ADR-011-unified-memory-schema-and-dynamic-vector-dimensions.md)
+  - [ADR-012: Context Assembly and Token Accounting Plumbing](docs/decisions/ADR-012-context-assembly-and-token-accounting-plumbing.md)

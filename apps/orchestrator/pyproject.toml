@@ -17,6 +17,7 @@ dependencies = [
     "routing-session",
     "personas-registry",
     "personas-runtime",
+    "personas-context-builder",
     "personas-tools-core",
     "personas-tools-impl",
     "safety-risk-classifier",

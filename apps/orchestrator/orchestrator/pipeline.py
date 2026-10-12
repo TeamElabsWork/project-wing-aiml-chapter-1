@@ -16,6 +16,7 @@ from memory_retriever.retriever import MemoryRetriever, MemoryRetrieverRegistry
 from memory_store.base import MemoryRepository, MemoryStoreRegistry
 from memory_store.embeddings import EmbeddingProviderRegistry
 from memory_writer.writer import MemoryWriter, MemoryWriterRegistry
+from personas_context_builder.base import ContextBuilder, ContextBuilderRegistry
 from personas_registry.registry import PersonaRegistry
 from personas_runtime.base import AgentRuntime, LLMProviderRegistry, RuntimeRegistry
 from personas_tools_core.enforcer import ToolScopeEnforcer
@@ -80,6 +81,7 @@ def register_all_defaults(config_dir: Optional[Path | str] = None) -> None:
     SessionManagerRegistry.register_defaults()
     RouterRegistry.register_defaults()
     RuntimeRegistry.register_defaults()
+    ContextBuilderRegistry.register_defaults()
     LLMProviderRegistry.register_defaults()
     ToolRegistry.register_defaults()
     RiskClassifierRegistry.register_defaults()
@@ -97,6 +99,7 @@ def reset_all_registries() -> None:
     SessionManagerRegistry.reset()
     RouterRegistry.reset()
     RuntimeRegistry.reset()
+    ContextBuilderRegistry.reset()
     LLMProviderRegistry.reset()
     ToolRegistry.reset()
     RiskClassifierRegistry.reset()
@@ -129,6 +132,8 @@ class OrchestratorPipeline:
         memory_retriever: MemoryRetriever,
         routing_logger: RoutingLoggerProtocol,
         tool_executor: Optional[ToolExecutor] = None,
+        context_builder: Optional[ContextBuilder] = None,
+        memory_retrieval_limit: int = 3,
     ) -> None:
         self.normalizer = normalizer
         self.identity_resolver = identity_resolver
@@ -148,6 +153,10 @@ class OrchestratorPipeline:
             risk_classifier=self.risk_classifier,
             approval_manager=self.approval_manager,
         )
+        self.context_builder = context_builder or _resolve_backend(
+            ContextBuilderRegistry, "default", "context_builder", "default"
+        )
+        self.memory_retrieval_limit = memory_retrieval_limit
 
     async def process(
         self,
@@ -180,13 +189,13 @@ class OrchestratorPipeline:
         # 4. Session State Retrieval (B3)
         session_state = await self.session_manager.get_session(envelope.session_id)
 
-        # 5. Cross-Surface Memory Retrieval (E3)
+        # 5. Cross-Surface Memory Retrieval (E3) using configured limit
         project_tag = (metadata or {}).get("project_tag") or envelope.metadata.get("project_tag")
         memory_context = await self.memory_retriever.retrieve(
             query=envelope.raw_text,
             user_id=envelope.user_id,
             surface=envelope.surface_context.surface_type,
-            limit=3,
+            limit=self.memory_retrieval_limit,
             project_tag=project_tag,
         )
 
@@ -198,18 +207,21 @@ class OrchestratorPipeline:
             memory_context=memory_context,
         )
 
-        # 7. Transparency Logging & Explanation (F1)
-        self.routing_logger.emit_log(
-            decision,
-            extra={
-                "message_id": envelope.message_id,
-                "surface": envelope.surface_context.surface_type,
-            },
-        )
+        # 7. Transparency Explanation Line Preparation (F1)
         routing_explanation = self.routing_logger.render_explanation(decision)
 
         # 8. Persona Lookup (C1)
         persona = self.persona_registry.get(decision.persona)
+
+        # 8b. Context Building (C2 / E3)
+        context_bundle = await self.context_builder.build(
+            envelope=envelope,
+            decision=decision,
+            persona=persona,
+            policy=policy_eval,
+            session_state=session_state,
+            memory=memory_context,
+        )
 
         # 9. Agent Runtime Execution (C2) with ToolExecutor returning RuntimeResult
         runtime_result: RuntimeResult = await self.agent_runtime.execute(
@@ -218,6 +230,21 @@ class OrchestratorPipeline:
             persona=persona,
             session_history=session_state.history,
             tool_executor=self.tool_executor,
+            context=context_bundle,
+        )
+
+        # Emit structured routing log line including token usage & context accounting
+        self.routing_logger.emit_log(
+            decision,
+            extra={
+                "message_id": envelope.message_id,
+                "surface": envelope.surface_context.surface_type,
+                "prompt_tokens": runtime_result.usage.prompt_tokens,
+                "completion_tokens": runtime_result.usage.completion_tokens,
+                "total_tokens": runtime_result.usage.total_tokens,
+                "estimated_tokens": context_bundle.estimated_tokens,
+                "dropped_items": context_bundle.dropped_items,
+            },
         )
 
         # Derive Response.status and Response.pending_approval ONLY from RuntimeResult
@@ -259,6 +286,7 @@ class OrchestratorPipeline:
             status=status,
             pending_approval=pending_approval,
             timestamp=datetime.now(timezone.utc),
+            usage=runtime_result.usage,
             metadata={
                 "message_id": envelope.message_id,
                 "surface_type": surface_type,
@@ -306,6 +334,8 @@ def create_pipeline(
         with open(pipeline_file, "r", encoding="utf-8") as f:
             pipeline_cfg = yaml.safe_load(f) or {}
     backends = pipeline_cfg.get("backends", {})
+    limits = pipeline_cfg.get("limits", {})
+    memory_retrieval_limit = limits.get("memory_retrieval_limit", 3)
 
     # 2. Load models.yaml
     models_cfg: Dict[str, Any] = {}
@@ -344,6 +374,10 @@ def create_pipeline(
         embedding_backend = models_cfg.get("embedding", {}).get("provider")
     else:
         embedding_backend = "default"
+
+    context_builder_backend = (
+        backends.get("context_builder") if _is_set(backends.get("context_builder")) else "default"
+    )
 
     identity_backend = (
         backends.get("identity_resolver")
@@ -393,6 +427,9 @@ def create_pipeline(
 
     router = _resolve_backend(RouterRegistry, router_backend, "router", "default")
     runtime = _resolve_backend(RuntimeRegistry, runtime_backend, "runtime", "default")
+    context_builder = _resolve_backend(
+        ContextBuilderRegistry, context_builder_backend, "context_builder", "default"
+    )
 
     risk_classifier = _resolve_backend(
         RiskClassifierRegistry, risk_classifier_backend, "risk_classifier", "default"
@@ -448,4 +485,6 @@ def create_pipeline(
         memory_retriever=memory_retriever,
         routing_logger=routing_logger,
         tool_executor=tool_executor,
+        context_builder=context_builder,
+        memory_retrieval_limit=memory_retrieval_limit,
     )

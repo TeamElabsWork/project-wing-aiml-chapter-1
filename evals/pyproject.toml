@@ -12,6 +12,8 @@ dependencies = [
     "contracts",
     "pyyaml>=6.0",
     "routing-router",
+    "personas-context-builder",
+    "personas-registry",
 ]
 
 [tool.hatch.build.targets.wheel]

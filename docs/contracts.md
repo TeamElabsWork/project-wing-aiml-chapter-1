@@ -1,4 +1,4 @@
-# System Contracts Reference (v0.2.0)
+# System Contracts Reference (v0.3.0)
 
 This document catalogs every Pydantic contract located in `packages/contracts/contracts/models.py`, specifying its purpose, schema fields, producers, and consumers.
 
@@ -12,12 +12,12 @@ The central routing decision contract determining persona, capabilities, autonom
 | `persona` | `str` | Chosen persona ID (`coder`, `researcher`, `ops`, `writer`). |
 | `tool_scope` | `List[str]` | Whitelist of tools allowed to be called during this turn. |
 | `autonomy` | `Autonomy` | Autonomy tier (`supervised`, `semi`, `full`, `read_only`). |
-| `urgency` | `UrgencyLevel` | Urgency tier (`low`, `medium`, `high`, `critical`). |
+| `urgency` | `UrgencyLevel` | Urgency tier (`low`, `normal`, `high`). |
 | `confidence` | `float` | Router confidence score in range `[0.0, 1.0]`. |
 | `reasoning` | `str` | Clear justification explaining why this route was selected. |
 
 - **Producer**: Router (`B2`)
-- **Consumers**: Persona Registry (`C1`), Agent Runtime (`C2`), Safety Subsystem (`D1`, `D2`), Routing Logger (`F1`).
+- **Consumers**: Persona Registry (`C1`), Context Builder (`C2`/`E3`), Agent Runtime (`C2`), Safety Subsystem (`D1`, `D2`), Routing Logger (`F1`).
 
 ---
 
@@ -27,14 +27,14 @@ Structured evaluation output from the Surface Policy Engine.
 | Field | Type | Description |
 |---|---|---|
 | `is_urgent` | `bool` | Whether input text or surface cues signify urgent processing. |
-| `urgency` | `UrgencyLevel` | Assessed urgency level (`low`, `medium`, `high`, `critical`). |
+| `urgency` | `UrgencyLevel` | Assessed urgency level (`low`, `normal`, `high`). |
 | `default_autonomy` | `Autonomy` | Baseline autonomy permitted by the surface policy. |
 | `max_tokens_budget` | `int` | Maximum recommended token response length. |
 | `supports_markdown` | `bool` | Whether markdown rendering is supported on this surface. |
 | `extras` | `Dict[str, Any]` | Additional surface policy attributes. |
 
 - **Producer**: Surface Policy Engine (`B1`)
-- **Consumer**: Router (`B2`)
+- **Consumers**: Router (`B2`), Context Builder (`C2`/`E3`)
 
 ---
 
@@ -49,7 +49,7 @@ Multi-turn conversation session state.
 | `metadata` | `Dict[str, Any]` | Arbitrary session state variables. |
 
 - **Producer**: Session Manager (`B3`)
-- **Consumers**: Router (`B2`), Agent Runtime (`C2`)
+- **Consumers**: Router (`B2`), Context Builder (`C2`/`E3`), Agent Runtime (`C2`)
 
 ---
 
@@ -67,7 +67,7 @@ Normalized cross-surface input event.
 | `timestamp` | `datetime` | UTC timestamp of event creation. |
 
 - **Producer**: Gateway Normalizer (`A3`)
-- **Consumers**: Router (`B2`), Agent Runtime (`C2`), Memory Writer (`E2`), Session Manager (`B3`).
+- **Consumers**: Router (`B2`), Context Builder (`C2`/`E3`), Agent Runtime (`C2`), Memory Writer (`E2`), Session Manager (`B3`).
 
 ---
 
@@ -83,10 +83,10 @@ Formal catalog specification of an agent tool.
 | `required_scopes` | `List[str]` | Required permissions/scopes. |
 | `destructive` | `bool` | If True, tool always requires explicit approval across all surfaces. |
 | `side_effects` | `SideEffects` | Side effect classification (`none`, `read`, `write`, `external`). |
-| `execution_target` | `ExecutionTarget` | Target environment (`local`, `remote`, `browser`). |
+| `execution_target` | `ExecutionTarget` | Target environment (`local`, `remote`, `any`). |
 
 - **Producers**: Tool Implementers (`C4`).
-- **Consumers**: Tool Registry (`C3`), Tool Scope Enforcer (`C3`), Tool Executor (`C3`), Risk Classifier (`D1`).
+- **Consumers**: Tool Registry (`C3`), Tool Scope Enforcer (`C3`), Tool Executor (`C3`), Risk Classifier (`D1`), Context Builder (`C2`/`E3`).
 
 ---
 
@@ -105,7 +105,56 @@ Structured tool invocation and execution payloads.
 
 ---
 
-### 7. `RuntimeResult`
+### 7. `TokenUsage`
+Structured token consumption statistics for prompts, completions, and aggregations.
+
+| Field | Type | Description |
+|---|---|---|
+| `prompt_tokens` | `int` | Tokens consumed by the input prompt (default 0). |
+| `completion_tokens` | `int` | Tokens generated in the completion (default 0). |
+| `total_tokens` | `int` | Total tokens consumed (prompt + completion, default 0). |
+| `estimated` | `bool` | Whether counts are estimated (`len//4`) or provider-reported (default True). |
+
+- **Producers**: Agent Runtimes (`C2`), LLM Providers (`C2`), Context Builder (`C2`/`E3`).
+- **Consumers**: `RuntimeResult`, `Response`, `RoutingLogger` (`F1`), Evaluation Runner (`F2`).
+
+---
+
+### 8. `ContextBundle`
+Assembled, policy-scoped context containing prompt instructions, history, cross-surface memory, and permitted tool specifications ready for agent execution.
+
+| Field | Type | Description |
+|---|---|---|
+| `persona_prompt` | `str` | Persona system prompt instructions. |
+| `history` | `List[Dict[str, Any]]` | Session turns prepared for runtime injection. |
+| `memory` | `List[MemoryNode]` | Retrieved cross-surface memory snippets. |
+| `tool_specs` | `List[ToolSpec]` | Whitelisted tool specifications allowed by `decision.tool_scope`. |
+| `token_budget` | `int` | Token budget assigned from surface policy (`PolicyEvaluation.max_tokens_budget`). |
+| `estimated_tokens` | `int` | Crude token count estimate (`len//4`). |
+| `dropped_items` | `int` | Count of history or memory items dropped due to budget constraints. |
+| `notes` | `List[str]` | Informational logs or context notes. |
+
+- **Producer**: Context Builder (`C2`/`E3`)
+- **Consumer**: Agent Runtime (`C2`)
+
+---
+
+### 9. `LLMResponse`
+Response wrapper returned by `LLMProvider.complete()` and `LLMProvider.structured()`.
+
+| Field | Type | Description |
+|---|---|---|
+| `text` | `Optional[str]` | Plain text generation output. |
+| `parsed` | `Optional[Any]` | Structured output payload conforming to requested schema. |
+| `usage` | `TokenUsage` | Token consumption statistics. |
+| `payload` | `Any` (property) | Returns `parsed` if present, else `text`. |
+
+- **Producer**: `LLMProvider` implementations (`MockLLMProvider`, vendor adapters).
+- **Consumers**: Agent Runtimes (`C2`), LLM Router (`B2`).
+
+---
+
+### 10. `RuntimeResult`
 Structured outcome produced by `AgentRuntime.execute(...)` replacing string inspection.
 
 | Field | Type | Description |
@@ -114,13 +163,14 @@ Structured outcome produced by `AgentRuntime.execute(...)` replacing string insp
 | `tool_results` | `List[ToolResult]` | Structured outcomes of all tools invoked during the turn. |
 | `pending_approval` | `Optional[ApprovalRequest]` | Populated if any tool requires human authorization. |
 | `error` | `Optional[str]` | Runtime failure message if execution faulted. |
+| `usage` | `TokenUsage` | Token consumption statistics for the runtime execution turn. |
 
 - **Producers**: `AgentRuntime` implementations (`EchoRuntime`, `ScriptedRuntime`, LLM runtimes).
 - **Consumers**: `OrchestratorPipeline` (derives turn `status` strictly from `RuntimeResult`).
 
 ---
 
-### 8. `Response`
+### 11. `Response`
 End-to-end response delivered back to the calling surface adapter.
 
 | Field | Type | Description |
@@ -133,4 +183,8 @@ End-to-end response delivered back to the calling surface adapter.
 | `status` | `ResponseStatus` | Execution status: `complete`, `pending_approval`, `denied`, `error`. Derived purely from `RuntimeResult`. |
 | `pending_approval` | `Optional[ApprovalRequest]` | If pending approval, the approval workflow request object. |
 | `timestamp` | `datetime` | Timestamp when the response was generated. |
+| `usage` | `TokenUsage` | Token consumption statistics for the overall execution turn. |
 | `metadata` | `Dict[str, Any]` | Structured response metrics. |
+
+- **Producer**: `OrchestratorPipeline`
+- **Consumers**: Surface Adapters (`A1`, `A2`, `apps/api`)

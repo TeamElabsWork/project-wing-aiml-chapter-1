@@ -5,6 +5,7 @@ Owner: C2
 
 from typing import Any, Dict, Type, TypeVar
 
+from contracts.models import LLMResponse, TokenUsage
 from pydantic import BaseModel
 
 from personas_runtime.base import LLMProviderRegistry
@@ -25,12 +26,23 @@ class MockLLMProvider:
         temperature: float = 0.7,
         max_tokens: int = 2048,
         **kwargs: Any,
-    ) -> str:
+    ) -> LLMResponse:
         # TODO (C2 Runtime Owner): Implement real vendor integrations
         # (Anthropic, OpenAI, LiteLLM) behind this protocol in separate adapters.
         if self.canned_response:
-            return self.canned_response
-        return f"[MockLLM Complete]: Processed prompt of length {len(prompt)} with system prompt '{system[:30]}'."
+            text = self.canned_response
+        else:
+            text = f"[MockLLM Complete]: Processed prompt of length {len(prompt)} with system prompt '{system[:30]}'."
+
+        prompt_tokens = (len(prompt) + len(system)) // 4
+        completion_tokens = len(text) // 4
+        usage = TokenUsage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            estimated=True,
+        )
+        return LLMResponse(text=text, usage=usage)
 
     async def structured(
         self,
@@ -39,14 +51,26 @@ class MockLLMProvider:
         system: str = "",
         temperature: float = 0.0,
         **kwargs: Any,
-    ) -> Any:
+    ) -> LLMResponse:
         # TODO (C2 Runtime Owner): Implement JSON schema enforcement / tool calling schemas.
+        parsed: Any = None
         if isinstance(schema, type) and issubclass(schema, BaseModel):
             try:
-                return schema()
+                parsed = schema()
             except Exception:
                 pass
-        return {"result": f"[MockLLM Structured]: Generated for schema {schema}"}
+        if parsed is None:
+            parsed = {"result": f"[MockLLM Structured]: Generated for schema {schema}"}
+
+        prompt_tokens = (len(prompt) + len(system)) // 4
+        completion_tokens = len(str(parsed)) // 4
+        usage = TokenUsage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            estimated=True,
+        )
+        return LLMResponse(parsed=parsed, usage=usage)
 
 
 LLMProviderRegistry.register_defaults()

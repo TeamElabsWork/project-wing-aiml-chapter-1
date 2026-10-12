@@ -9,6 +9,8 @@ from typing import Any, Dict, List
 
 import yaml
 from contracts.models import RequestEnvelope, RouteDecision, SessionState, SurfaceContext
+from personas_context_builder.passthrough import PassthroughContextBuilder
+from personas_registry.registry import PersonaRegistry
 from routing_router.base import Router
 from routing_router.mock_router import MockRouter
 from routing_surface_policy.policy import SurfacePolicyEngine
@@ -29,7 +31,12 @@ async def run_evals_async(
     cases: List[Dict[str, Any]] = data.get("cases", [])
     results: List[Dict[str, Any]] = []
     persona_matches = 0
+    total_estimated_tokens = 0
     policy_engine = SurfacePolicyEngine()
+
+    personas_dir = Path("config/personas")
+    persona_registry = PersonaRegistry(personas_dir=personas_dir if personas_dir.exists() else None)
+    context_builder = PassthroughContextBuilder()
 
     for c in cases:
         case_id = c["id"]
@@ -66,6 +73,18 @@ async def run_evals_async(
         if matched:
             persona_matches += 1
 
+        persona = persona_registry.get(decision.persona)
+        context_bundle = await context_builder.build(
+            envelope=envelope,
+            decision=decision,
+            persona=persona,
+            policy=policy_eval,
+            session_state=session_state,
+            memory=[],
+        )
+        case_estimated_tokens = context_bundle.estimated_tokens
+        total_estimated_tokens += case_estimated_tokens
+
         results.append(
             {
                 "case_id": case_id,
@@ -76,6 +95,7 @@ async def run_evals_async(
                 "matched": matched,
                 "confidence": decision.confidence,
                 "reasoning": decision.reasoning,
+                "estimated_tokens": case_estimated_tokens,
             }
         )
 
@@ -86,6 +106,7 @@ async def run_evals_async(
         "total_cases": total,
         "persona_matches": persona_matches,
         "accuracy": accuracy,
+        "total_estimated_tokens": total_estimated_tokens,
         "case_results": results,
     }
 
@@ -106,8 +127,10 @@ def main() -> None:
     for r in report["case_results"]:
         status = "PASS" if r["matched"] else "FAIL"
         print(
-            f"[{status}] {r['case_id']}: expected '{r['expected_persona']}', got '{r['predicted_persona']}'"
+            f"[{status}] {r['case_id']}: expected '{r['expected_persona']}', got '{r['predicted_persona']}' "
+            f"(estimated tokens: {r['estimated_tokens']})"
         )
+    print(f"Total estimated tokens across all cases: {report['total_estimated_tokens']}")
 
 
 if __name__ == "__main__":

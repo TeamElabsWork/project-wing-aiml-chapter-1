@@ -17,6 +17,7 @@ dependencies = [
     "routing-session",
     "personas-registry",
     "personas-runtime",
+    "personas-context-builder",
     "personas-tools-core",
     "personas-tools-impl",
     "safety-risk-classifier",
@@ -55,6 +56,7 @@ members = [
     "packages/routing/session",
     "packages/personas/registry",
     "packages/personas/runtime",
+    "packages/personas/context_builder",
     "packages/personas/tools_core",
     "packages/personas/tools_impl",
     "packages/safety/risk_classifier",
@@ -77,6 +79,7 @@ routing-router = { workspace = true }
 routing-session = { workspace = true }
 personas-registry = { workspace = true }
 personas-runtime = { workspace = true }
+personas-context-builder = { workspace = true }
 personas-tools-core = { workspace = true }
 personas-tools-impl = { workspace = true }
 safety-risk-classifier = { workspace = true }
@@ -106,6 +109,7 @@ pythonpath = [
     "packages/routing/session",
     "packages/personas/registry",
     "packages/personas/runtime",
+    "packages/personas/context_builder",
     "packages/personas/tools_core",
     "packages/personas/tools_impl",
     "packages/safety/risk_classifier",
@@ -148,6 +152,7 @@ mypy_path = [
     "packages/routing/session",
     "packages/personas/registry",
     "packages/personas/runtime",
+    "packages/personas/context_builder",
     "packages/personas/tools_core",
     "packages/personas/tools_impl",
     "packages/safety/risk_classifier",

@@ -1,6 +1,6 @@
 """Shared contracts package for Surface-Aware Agent Orchestration.
 
-Version: 0.2.0
+Version: 0.3.0
 """
 
 from contracts.models import (
@@ -9,7 +9,9 @@ from contracts.models import (
     ApprovalRequest,
     ApprovalResponse,
     Autonomy,
+    ContextBundle,
     ExecutionTarget,
+    LLMResponse,
     MemoryNode,
     Persona,
     PolicyEvaluation,
@@ -23,13 +25,14 @@ from contracts.models import (
     SideEffects,
     SurfaceContext,
     SurfaceType,
+    TokenUsage,
     ToolCall,
     ToolResult,
     ToolSpec,
     UrgencyLevel,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "__version__",
@@ -37,8 +40,10 @@ __all__ = [
     "ApprovalRequest",
     "ApprovalResponse",
     "Autonomy",
+    "ContextBundle",
     "ExecutionTarget",
     "KNOWN_SURFACES",
+    "LLMResponse",
     "MemoryNode",
     "Persona",
     "PolicyEvaluation",
@@ -52,6 +57,7 @@ __all__ = [
     "SideEffects",
     "SurfaceContext",
     "SurfaceType",
+    "TokenUsage",
     "ToolCall",
     "ToolResult",
     "ToolSpec",
