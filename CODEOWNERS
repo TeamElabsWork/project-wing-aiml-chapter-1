@@ -14,7 +14,7 @@
 
 # Surface Adapters (A1, A2)
 /packages/surfaces/telegram_slack/  @owner-surfaces-chat
-/packages/surfaces/cli/             @owner-surfaces-cli
+/packages/surfaces/cli/             @tejrai07
 
 # Gateway & Identity (A3, A4)
 /packages/gateway/                  @owner-gateway
