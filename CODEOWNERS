@@ -21,7 +21,7 @@
 /packages/identity/                 @owner-identity
 
 # Routing & Session (B1, B2, B3)
-/packages/routing/surface_policy/   @owner-surface-policy
+/packages/routing/surface_policy/   @tejrai07
 /packages/routing/router/           @owner-router
 /packages/routing/session/          @owner-session
 
