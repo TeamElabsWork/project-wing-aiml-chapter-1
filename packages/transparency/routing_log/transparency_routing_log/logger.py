@@ -11,6 +11,7 @@ from contracts.models import RouteDecision
 
 from .formatters import (
     format_markdown,
+    format_slack,
     format_terminal,
     new_correlation_id,
 )
@@ -29,6 +30,10 @@ class RoutingLoggerProtocol(Protocol):
 
     def render_markdown(self, decision: RouteDecision) -> str:
         """Render the explanation as a markdown quote block."""
+        ...
+
+    def render_slack(self, decision: RouteDecision) -> str:
+        """Render the explanation as a Slack mrkdwn quote block."""
         ...
 
     def render_for_surface(self, decision: RouteDecision, surface: str) -> str:
@@ -73,11 +78,24 @@ class RoutingLogger:
             float(decision.confidence),
         )
 
+    def render_slack(self, decision: RouteDecision) -> str:
+        return format_slack(
+            str(decision.persona),
+            str(decision.reasoning),
+            str(decision.autonomy),
+            float(decision.confidence),
+        )
+
     def render_for_surface(self, decision: RouteDecision, surface: str) -> str:
-        """CLI gets colored text; chat/web surfaces get markdown; unknown gets plain text."""
+        """CLI gets colors, Slack gets mrkdwn, web gets markdown.
+
+        Telegram (supports_markdown: false) and unknown surfaces get clean plain text.
+        """
         if surface == "cli":
             return self.render_terminal(decision)
-        if surface in ("slack", "telegram", "web"):
+        if surface == "slack":
+            return self.render_slack(decision)
+        if surface == "web":
             return self.render_markdown(decision)
         return self.render_explanation(decision)
 
@@ -101,4 +119,4 @@ class RoutingLogger:
 
     def emit_log(self, decision: RouteDecision, extra: Dict[str, Any] | None = None) -> str:
         """Returns JSON string for structured logging sinks."""
-        return json.dumps(self.to_structured_log(decision, extra))
+        return json.dumps(self.to_structured_log(decision, extra), default=str)

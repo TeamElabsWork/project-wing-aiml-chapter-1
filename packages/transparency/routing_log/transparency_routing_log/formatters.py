@@ -69,3 +69,16 @@ def format_markdown(
         f"> Summoned **{persona}** because {reasoning}\n"
         f"> _autonomy:_ `{autonomy}` · _confidence:_ `{confidence:.2f}`"
     )
+
+
+def format_slack(
+    persona: str,
+    reasoning: str,
+    autonomy: str,
+    confidence: float,
+) -> str:
+    """Slack mrkdwn quote block (Slack bold is a single asterisk)."""
+    return (
+        f"> Summoned *{persona}* because {reasoning}\n"
+        f"> _autonomy:_ `{autonomy}` · _confidence:_ `{confidence:.2f}`"
+    )
