@@ -42,8 +42,8 @@
 /packages/memory/retriever/         @owner-memory-retriever
 
 # Transparency, Logging & Evals (F1, F2, F3)
-/packages/transparency/routing_log/ @owner-transparency
-/evals/                             @owner-evals
+/packages/transparency/routing_log/ @aroosahoda
+/evals/                             @aroosahoda
 /infra/                             @owner-infra
 
 # Orchestrator Application & Core Setup
