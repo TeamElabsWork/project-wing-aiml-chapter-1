@@ -25,3 +25,161 @@ cases:
     surface: "cli"
     expected_persona: "writer"
     expected_autonomy: "full"
+
+
+  # ---- Added for issue #13: edge-case routing scenarios ----
+
+  # Priority order: researcher > ops > writer > coder
+  - id: "case_005_research_beats_coder"
+    input_text: "Research the best sorting algorithm and write python code for it"
+    surface: "web"
+    expected_persona: "researcher"
+    expected_autonomy: "semi"
+
+  - id: "case_006_ops_beats_coder"
+    input_text: "Fix the bug in the production server"
+    surface: "slack"
+    expected_persona: "ops"
+    expected_autonomy: "supervised"
+
+  - id: "case_007_research_beats_ops"
+    input_text: "Find papers about incident response in production"
+    surface: "web"
+    expected_persona: "researcher"
+    expected_autonomy: "semi"
+
+  - id: "case_008_writer_beats_coder"
+    input_text: "Draft a test plan for the python service"
+    surface: "cli"
+    expected_persona: "writer"
+    expected_autonomy: "full"
+
+  - id: "case_009_ops_beats_writer"
+    input_text: "Draft a postmortem for the production outage"
+    surface: "slack"
+    expected_persona: "ops"
+    expected_autonomy: "supervised"
+
+  - id: "case_010_research_beats_writer"
+    input_text: "Draft a literature review summary"
+    surface: "web"
+    expected_persona: "researcher"
+    expected_autonomy: "semi"
+
+  - id: "case_011_ops_beats_documentation"
+    input_text: "Write documentation for the deploy script"
+    surface: "cli"
+    expected_persona: "ops"
+    expected_autonomy: "supervised"
+
+  - id: "case_012_readme_beats_fix"
+    input_text: "Fix the typo in the README"
+    surface: "cli"
+    expected_persona: "writer"
+    expected_autonomy: "full"
+
+  # Single-keyword routing across surfaces
+  - id: "case_013_unit_test_request"
+    input_text: "Add a unit test for the parser"
+    surface: "cli"
+    expected_persona: "coder"
+    expected_autonomy: "semi"
+
+  - id: "case_014_deploy_request"
+    input_text: "Please deploy the new build"
+    surface: "slack"
+    expected_persona: "ops"
+    expected_autonomy: "supervised"
+
+  - id: "case_015_k8s_keyword"
+    input_text: "Update the k8s manifests for the cluster"
+    surface: "slack"
+    expected_persona: "ops"
+    expected_autonomy: "supervised"
+
+  - id: "case_016_infra_keyword"
+    input_text: "The infra team needs a quick summary"
+    surface: "web"
+    expected_persona: "ops"
+    expected_autonomy: "supervised"
+
+  - id: "case_017_destructive_delete"
+    input_text: "Please DELETE the old backups"
+    surface: "telegram"
+    expected_persona: "ops"
+    expected_autonomy: "supervised"
+
+  - id: "case_018_release_notes_phrase"
+    input_text: "Prepare release notes for v2"
+    surface: "web"
+    expected_persona: "writer"
+    expected_autonomy: "full"
+
+  # Text-handling edge cases
+  - id: "case_019_all_caps_input"
+    input_text: "FIX THIS PYTHON CLASS NOW"
+    surface: "telegram"
+    expected_persona: "coder"
+    expected_autonomy: "semi"
+
+  - id: "case_020_punctuation_boundaries"
+    input_text: "Refactor, then test!"
+    surface: "cli"
+    expected_persona: "coder"
+    expected_autonomy: "semi"
+
+  - id: "case_021_newline_in_text"
+    input_text: "Write the README.\nThen add release notes"
+    surface: "web"
+    expected_persona: "writer"
+    expected_autonomy: "full"
+
+  - id: "case_022_hyphenated_keyword"
+    input_text: "Summarize the papers-in-progress folder"
+    surface: "web"
+    expected_persona: "researcher"
+    expected_autonomy: "semi"
+
+  - id: "case_023_keyword_at_end_of_long_text"
+    input_text: "Here is a lot of background that does not matter at all, and a lot more background that matters even less, but the real ask is to fix the python class"
+    surface: "web"
+    expected_persona: "coder"
+    expected_autonomy: "semi"
+
+  - id: "case_024_markdown_code_block"
+    input_text: "why does this fail?\n```python\nprint(x)\n```"
+    surface: "web"
+    expected_persona: "coder"
+    expected_autonomy: "semi"
+
+  - id: "case_025_urgent_exclamations"
+    input_text: "URGENT!!! deploy to staging asap"
+    surface: "slack"
+    expected_persona: "ops"
+    expected_autonomy: "supervised"
+
+  # Hinglish (romanized, ASCII only so file encoding is never an issue)
+  - id: "case_026_hinglish_readme"
+    input_text: "mujhe ek readme likhna hai project ke liye"
+    surface: "telegram"
+    expected_persona: "writer"
+    expected_autonomy: "full"
+
+  - id: "case_027_hinglish_research"
+    input_text: "mujhe research papers chahiye diffusion models par"
+    surface: "telegram"
+    expected_persona: "researcher"
+    expected_autonomy: "semi"
+
+  # Known limitations of the keyword router (expected values document CURRENT behavior)
+  - id: "case_028_negation_ignored"
+    input_text: "Do not delete anything, just list the files"
+    surface: "cli"
+    expected_persona: "ops"
+    expected_autonomy: "supervised"
+
+  - id: "case_029_keyword_false_positive"
+    input_text: "Review the production schedule for the film crew"
+    surface: "web"
+    expected_persona: "ops"
+    expected_autonomy: "supervised"
