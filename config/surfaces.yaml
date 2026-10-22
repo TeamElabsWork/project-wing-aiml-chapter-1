@@ -17,8 +17,10 @@ surfaces:
       after_hours:
         start: "18:00"
         end: "08:00"
+        all_messages: true
         escalate_to: "high"
       weekends:
+        all_messages: true
         escalate_to: "high"
     autonomy_restriction:
       on_urgent: "supervised"

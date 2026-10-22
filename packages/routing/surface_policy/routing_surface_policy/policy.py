@@ -188,10 +188,8 @@ class SurfacePolicyEngine:
         if is_urgent:
             if time_escalate_to:
                 urgency = _normalize_urgency_level(time_escalate_to)
-            elif surface_ctx.urgency_hint:
-                urgency = _normalize_urgency_level(surface_ctx.urgency_hint)
             else:
-                urgency = "high"
+                urgency = "high"  # Don't let a low hint downgrade an urgent keyword
         else:
             urgency = _normalize_urgency_level(surface_ctx.urgency_hint)
 
@@ -248,12 +246,12 @@ class SurfacePolicyEngine:
         budget_policy = "default"
 
         if isinstance(dynamic_budget, dict):
-            if is_urgent and "urgent" in dynamic_budget:
-                max_tokens_budget = int(dynamic_budget["urgent"])
-                budget_policy = "urgent_dynamic_budget"
-            elif time_escalation_applied and "after_hours" in dynamic_budget:
+            if time_escalation_applied and "after_hours" in dynamic_budget:
                 max_tokens_budget = int(dynamic_budget["after_hours"])
                 budget_policy = "after_hours_dynamic_budget"
+            elif is_urgent and "urgent" in dynamic_budget:
+                max_tokens_budget = int(dynamic_budget["urgent"])
+                budget_policy = "urgent_dynamic_budget"
 
         return PolicyEvaluation(
             is_urgent=is_urgent,
@@ -267,9 +265,7 @@ class SurfacePolicyEngine:
                 "keyword_matched": keyword_matched,
                 "time_escalation_applied": time_escalation_applied,
                 "time_reason": time_reason,
-                "autonomy_restriction_applied": (
-                    assigned_autonomy != default_autonomy or (restriction_cfg is not None)
-                ),
+                "autonomy_restriction_applied": assigned_autonomy != default_autonomy,
                 "recommended_autonomy": assigned_autonomy,
                 "budget_policy": budget_policy,
                 "config_reloaded": was_reloaded,

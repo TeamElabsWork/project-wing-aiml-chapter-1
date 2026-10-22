@@ -9,6 +9,7 @@ Covers:
 - Fallback defaults for unconfigured or unknown surfaces
 """
 
+import os
 import time as stdlib_time
 from datetime import datetime, time, timezone
 from pathlib import Path
@@ -76,10 +77,7 @@ def test_hot_reload_on_file_change(tmp_path: Path) -> None:
     assert eval1.max_tokens_budget == 2048
     assert eval1.is_urgent is False
 
-    # Ensure mtime will be different by sleeping briefly if filesystem has 1s resolution
-    stdlib_time.sleep(0.05)
-
-    # Update config file on disk
+    # Update config file on disk and bump mtime deterministically without sleep
     updated_config = {
         "version": "1.0",
         "surfaces": {
@@ -91,6 +89,8 @@ def test_hot_reload_on_file_change(tmp_path: Path) -> None:
         },
     }
     cfg_file.write_text(yaml.dump(updated_config), encoding="utf-8")
+    new_mtime = (engine.config_mtime or stdlib_time.time()) + 2
+    os.utime(cfg_file, (new_mtime, new_mtime))
 
     # Second evaluation picks up the new config automatically
     eval2 = engine.evaluate(ctx, "regular query")
@@ -122,9 +122,10 @@ def test_hot_reload_error_resilience(tmp_path: Path) -> None:
     eval_initial = engine.evaluate(ctx, "hello")
     assert eval_initial.max_tokens_budget == 4000
 
-    # Write broken YAML
-    stdlib_time.sleep(0.05)
+    # Write broken YAML and bump mtime deterministically without sleep
     cfg_file.write_text("invalid: [yaml: broken :::", encoding="utf-8")
+    new_mtime = (engine.config_mtime or stdlib_time.time()) + 2
+    os.utime(cfg_file, (new_mtime, new_mtime))
 
     # Evaluate should not raise an exception, and keeps previous config
     eval_broken = engine.evaluate(ctx, "hello")
@@ -135,27 +136,34 @@ def test_keyword_urgency_detection() -> None:
     """Test keyword-based urgency matching and urgency hints."""
     engine = SurfacePolicyEngine("config/surfaces.yaml")
     ctx = SurfaceContext(surface_type="cli", client_id="cli-1")
+    day_dt = datetime(2026, 10, 14, 14, 0, 0, tzinfo=timezone.utc)
 
     # Matches keyword 'urgent'
-    eval_kw = engine.evaluate(ctx, "Please handle this urgent ticket")
+    eval_kw = engine.evaluate(ctx, "Please handle this urgent ticket", now=day_dt)
     assert eval_kw.is_urgent is True
     assert eval_kw.urgency == "high"
     assert eval_kw.extras["keyword_matched"] is True
 
     # Matches keyword 'asap'
-    eval_asap = engine.evaluate(ctx, "Need this done ASAP")
+    eval_asap = engine.evaluate(ctx, "Need this done ASAP", now=day_dt)
     assert eval_asap.is_urgent is True
 
     # Normal text
-    eval_norm = engine.evaluate(ctx, "List all active users")
+    eval_norm = engine.evaluate(ctx, "List all active users", now=day_dt)
     assert eval_norm.is_urgent is False
     assert eval_norm.urgency == "normal"
 
     # Urgency hint override
     ctx_hint = SurfaceContext(surface_type="cli", client_id="cli-1", urgency_hint="high")
-    eval_hint = engine.evaluate(ctx_hint, "Normal text with high hint")
+    eval_hint = engine.evaluate(ctx_hint, "Normal text with high hint", now=day_dt)
     assert eval_hint.is_urgent is True
     assert eval_hint.urgency == "high"
+
+    # Urgent keyword with low urgency hint should NOT be downgraded
+    ctx_low_hint = SurfaceContext(surface_type="cli", client_id="cli-1", urgency_hint="low")
+    eval_urgent_low = engine.evaluate(ctx_low_hint, "CRITICAL BUG FIX ASAP", now=day_dt)
+    assert eval_urgent_low.is_urgent is True
+    assert eval_urgent_low.urgency == "high"
 
 
 def test_time_based_after_hours_escalation() -> None:
@@ -216,48 +224,67 @@ def test_time_based_all_messages_rule(tmp_path: Path) -> None:
 def test_autonomy_restrictions_mobile_and_urgent() -> None:
     """Verify that mobile surfaces recommend supervised autonomy and urgent rules restrict further."""
     engine = SurfacePolicyEngine("config/surfaces.yaml")
+    day_dt = datetime(2026, 10, 14, 14, 0, 0, tzinfo=timezone.utc)
 
     # Telegram (mobile) defaults to supervised
     tg_ctx = SurfaceContext(surface_type="telegram", client_id="tg-1")
-    eval_tg_normal = engine.evaluate(tg_ctx, "status check")
+    eval_tg_normal = engine.evaluate(tg_ctx, "status check", now=day_dt)
     assert eval_tg_normal.default_autonomy == "supervised"
 
     # Telegram on urgent restricts to read_only per surfaces.yaml
-    eval_tg_urgent = engine.evaluate(tg_ctx, "urgent: database alert")
+    eval_tg_urgent = engine.evaluate(tg_ctx, "urgent: database alert", now=day_dt)
     assert eval_tg_urgent.is_urgent is True
     assert eval_tg_urgent.default_autonomy == "read_only"
     assert eval_tg_urgent.extras["autonomy_restriction_applied"] is True
 
     # CLI defaults to semi, and restricts to supervised on urgent per surfaces.yaml
     cli_ctx = SurfaceContext(surface_type="cli", client_id="cli-1")
-    eval_cli_normal = engine.evaluate(cli_ctx, "git status")
+    eval_cli_normal = engine.evaluate(cli_ctx, "git status", now=day_dt)
     assert eval_cli_normal.default_autonomy == "semi"
+    assert eval_cli_normal.extras["autonomy_restriction_applied"] is False
 
-    eval_cli_urgent = engine.evaluate(cli_ctx, "emergency server rollback")
+    eval_cli_urgent = engine.evaluate(cli_ctx, "emergency server rollback", now=day_dt)
     assert eval_cli_urgent.is_urgent is True
     assert eval_cli_urgent.default_autonomy == "supervised"
+    assert eval_cli_urgent.extras["autonomy_restriction_applied"] is True
 
 
 def test_dynamic_token_budgets() -> None:
-    """Verify dynamic token budget adjustments for urgent requests."""
+    """Verify dynamic token budget adjustments for urgent and after-hours requests."""
     engine = SurfacePolicyEngine("config/surfaces.yaml")
+    day_dt = datetime(2026, 10, 14, 14, 0, 0, tzinfo=timezone.utc)
+    night_dt = datetime(2026, 10, 14, 23, 0, 0, tzinfo=timezone.utc)
 
-    # CLI normal budget: 4096; urgent budget: 2048
+    # CLI normal budget: 4096; urgent budget: 2048; after_hours budget: 1024
     cli_ctx = SurfaceContext(surface_type="cli", client_id="cli-1")
-    eval_cli_norm = engine.evaluate(cli_ctx, "run benchmark")
+    eval_cli_norm = engine.evaluate(cli_ctx, "run benchmark", now=day_dt)
     assert eval_cli_norm.max_tokens_budget == 4096
     assert eval_cli_norm.extras["budget_policy"] == "default"
 
-    eval_cli_urgent = engine.evaluate(cli_ctx, "urgent: process locked")
+    # Daytime urgent request selects urgent budget
+    eval_cli_urgent = engine.evaluate(cli_ctx, "urgent: process locked", now=day_dt)
     assert eval_cli_urgent.max_tokens_budget == 2048
     assert eval_cli_urgent.extras["budget_policy"] == "urgent_dynamic_budget"
 
+    # Off-hours request selects after_hours dynamic budget (1024) instead of urgent budget (2048)
+    eval_cli_night = engine.evaluate(cli_ctx, "night maintenance", now=night_dt)
+    assert eval_cli_night.is_urgent is True
+    assert eval_cli_night.max_tokens_budget == 1024
+    assert eval_cli_night.extras["budget_policy"] == "after_hours_dynamic_budget"
+
+    # Weekend request with all_messages: true escalates to high
+    weekend_dt = datetime(2026, 10, 18, 12, 0, 0, tzinfo=timezone.utc)  # Sunday
+    eval_cli_weekend = engine.evaluate(cli_ctx, "routine weekend ping", now=weekend_dt)
+    assert eval_cli_weekend.is_urgent is True
+    assert eval_cli_weekend.extras["time_escalation_applied"] is True
+    assert eval_cli_weekend.extras["time_reason"] == "weekend"
+
     # Telegram normal budget: 1024; urgent budget: 512
     tg_ctx = SurfaceContext(surface_type="telegram", client_id="tg-1")
-    eval_tg_norm = engine.evaluate(tg_ctx, "get summary")
+    eval_tg_norm = engine.evaluate(tg_ctx, "get summary", now=day_dt)
     assert eval_tg_norm.max_tokens_budget == 1024
 
-    eval_tg_urgent = engine.evaluate(tg_ctx, "sos system failure")
+    eval_tg_urgent = engine.evaluate(tg_ctx, "sos system failure", now=day_dt)
     assert eval_tg_urgent.max_tokens_budget == 512
 
 
@@ -280,5 +307,5 @@ def test_surface_policy_registry() -> None:
     assert isinstance(engine, SurfacePolicyEngine)
 
     ctx = SurfaceContext(surface_type="cli", client_id="cli-1")
-    res = engine.evaluate(ctx, "test")
+    res = engine.evaluate(ctx, "test", now=datetime(2026, 10, 14, 14, 0, 0, tzinfo=timezone.utc))
     assert res.max_tokens_budget == 4096
