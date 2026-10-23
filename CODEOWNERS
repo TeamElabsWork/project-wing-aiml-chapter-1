@@ -23,7 +23,7 @@
 # Routing & Session (B1, B2, B3)
 /packages/routing/surface_policy/   @tejrai07
 /packages/routing/router/           @owner-router
-/packages/routing/session/          @owner-session
+/packages/routing/session/          @tejrai07
 
 # Personas, Runtime & Tools (C1, C2, C3, C4)
 /packages/personas/registry/        @owner-persona-registry
