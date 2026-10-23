@@ -13,6 +13,20 @@ surfaces:
       - "emergency"
       - "fix now"
     max_tokens_budget: 4096
+    time_urgency_rules:
+      after_hours:
+        start: "18:00"
+        end: "08:00"
+        all_messages: true
+        escalate_to: "high"
+      weekends:
+        all_messages: true
+        escalate_to: "high"
+    autonomy_restriction:
+      on_urgent: "supervised"
+    dynamic_budget:
+      urgent: 2048
+      after_hours: 1024
     metadata:
       channel: "terminal"
       allow_raw_formatting: true
@@ -27,6 +41,19 @@ surfaces:
       - "sos"
       - "alert"
     max_tokens_budget: 1024
+    time_urgency_rules:
+      after_hours:
+        start: "22:00"
+        end: "07:00"
+        escalate_to: "high"
+      weekends:
+        escalate_to: "high"
+    autonomy_restriction:
+      default: "supervised"
+      on_urgent: "read_only"
+    dynamic_budget:
+      urgent: 512
+      after_hours: 512
     metadata:
       channel: "mobile_chat"
 
@@ -41,6 +68,17 @@ surfaces:
       - "incident"
       - "outage"
     max_tokens_budget: 2048
+    time_urgency_rules:
+      after_hours:
+        start: "19:00"
+        end: "08:00"
+        escalate_to: "high"
+      weekends:
+        escalate_to: "high"
+    autonomy_restriction:
+      on_urgent: "supervised"
+    dynamic_budget:
+      urgent: 1024
     metadata:
       channel: "team_chat"
 
@@ -52,5 +90,9 @@ surfaces:
     urgency_keywords:
       - "urgent"
     max_tokens_budget: 4096
+    autonomy_restriction:
+      on_urgent: "supervised"
+    dynamic_budget:
+      urgent: 2048
     metadata:
       channel: "browser"

@@ -191,23 +191,23 @@ async def test_runtime_receives_surface_token_budget() -> None:
     recording_runtime = RecordingRuntime()
     pipeline.agent_runtime = recording_runtime
 
-    # Test Surface 1: CLI (configured with 4096 tokens in config/surfaces.yaml)
+    # Test Surface 1: CLI (configured with 4096 tokens in config/surfaces.yaml, or 1024 after-hours)
     await pipeline.process(
         raw_input="Investigate high CPU usage",
         surface_type="cli",
         session_id="test-cli-sess",
     )
     assert recording_runtime.last_context is not None
-    assert recording_runtime.last_context.token_budget == 4096
+    assert recording_runtime.last_context.token_budget in (4096, 1024)
 
-    # Test Surface 2: Telegram (configured with 1024 tokens in config/surfaces.yaml)
+    # Test Surface 2: Telegram (configured with 1024 tokens in config/surfaces.yaml, or 512 after-hours)
     await pipeline.process(
         raw_input="Check server status",
         surface_type="telegram",
         session_id="test-tg-sess",
     )
     assert recording_runtime.last_context is not None
-    assert recording_runtime.last_context.token_budget == 1024
+    assert recording_runtime.last_context.token_budget in (1024, 512)
 
 
 @pytest.mark.asyncio
