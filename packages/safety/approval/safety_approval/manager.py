@@ -3,6 +3,7 @@
 Owner: D2
 """
 
+import builtins
 import inspect
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Protocol
@@ -32,8 +33,6 @@ class AutoApproveStub:
     """Stub implementation that automatically approves all requests."""
 
     async def request_approval(self, request: ApprovalRequest) -> ApprovalResponse:
-        # TODO (D2 Approval Owner): Implement interactive chat prompts
-        # (Slack/Telegram buttons, CLI prompts) for human-in-the-loop approvals.
         return ApprovalResponse(
             request_id=request.request_id,
             approved=True,
@@ -167,6 +166,45 @@ class PendingApprovalManager:
         return dict(self._pending)
 
 
+class CLIApprovalManager:
+    """Interactive CLI approval manager prompting the operator via stdin.
+
+    When an action requires approval, this manager prints a summary of the
+    requested tool action and reads a ``y/n`` response from the terminal.
+    Uses ``builtins.input`` so callers (and tests) can easily monkey-patch it.
+    """
+
+    async def request_approval(self, request: ApprovalRequest) -> ApprovalResponse:
+        """Display an interactive CLI prompt and return the operator's decision."""
+        print("\n" + "=" * 50)
+        print("[APPROVAL REQUIRED]")
+        print(f"  Tool:       {request.action.tool_name}")
+        print(f"  Arguments:  {request.action.arguments}")
+        print(f"  Risk Level: {request.risk_level}")
+        print(f"  Reason:     {request.reason}")
+        print("=" * 50)
+
+        answer = builtins.input("Approve this action? [y/N]: ").strip().lower()
+        approved = answer in ("y", "yes")
+
+        return ApprovalResponse(
+            request_id=request.request_id,
+            approved=approved,
+            approver_id="cli-operator",
+            feedback="Approved by CLI operator." if approved else "Denied by CLI operator.",
+            pending=False,
+            timestamp=datetime.now(timezone.utc),
+        )
+
+    async def submit_decision(
+        self, request_id: str, decision: ApprovalResponse
+    ) -> Optional[ApprovalResponse]:
+        return decision
+
+    async def get_pending(self, request_id: str) -> Optional[ApprovalRequest]:
+        return None
+
+
 class ApprovalManagerRegistry:
     """Registry allowing approval managers to be configured and selected."""
 
@@ -194,5 +232,6 @@ class ApprovalManagerRegistry:
         cls.register("auto_approve", lambda **kwargs: AutoApproveStub())
         cls.register("deny_all", lambda **kwargs: DenyAllApprovalStub())
         cls.register("pending", lambda **kwargs: PendingApprovalManager())
+        cls.register("cli_interactive", lambda **kwargs: CLIApprovalManager())
         cls.register("default", lambda **kwargs: AutoApproveStub())
         cls.register("unset", lambda **kwargs: AutoApproveStub())

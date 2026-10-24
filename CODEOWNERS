@@ -33,8 +33,8 @@
 /packages/personas/tools_impl/      @owner-tools-impl
 
 # Safety & Approvals (D1, D2)
-/packages/safety/risk_classifier/   @owner-risk-classifier
-/packages/safety/approval/          @owner-approval
+/packages/safety/risk_classifier/   @tejrai07
+/packages/safety/approval/          @tejrai07
 
 # Cross-Surface Memory (E1, E2, E3)
 /packages/memory/store/             @owner-memory-store

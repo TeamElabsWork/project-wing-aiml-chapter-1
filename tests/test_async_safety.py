@@ -416,3 +416,180 @@ router:
     pipeline = create_pipeline(config_dir=cfg_dir)
     # Pipeline should have resolved router to MockRouter
     assert isinstance(pipeline.router, MockRouter)
+
+
+# ---------------------------------------------------------------------------
+# Issue #10 — Risk Classifier & Human-in-the-Loop Approval Gate tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_rule_based_classifier_argument_patterns() -> None:
+    """Verify RuleBasedRiskClassifier inspects arguments for dangerous patterns."""
+    from safety_risk_classifier.classifier import RuleBasedRiskClassifier
+
+    classifier = RuleBasedRiskClassifier()
+
+    from contracts.models import ActionRequest, ToolSpec
+
+    # Critical: --force flag in arguments
+    action_force = ActionRequest(
+        call_id="c1",
+        tool_name="git_push",
+        arguments={"command": "git push --force origin main"},
+        caller_persona="coder",
+    )
+    assert classifier.classify(action_force) == "critical"
+
+    # Critical: rm -rf in arguments
+    action_rm = ActionRequest(
+        call_id="c2",
+        tool_name="shell_exec",
+        arguments={"cmd": "rm -rf /tmp/data"},
+        caller_persona="ops",
+    )
+    assert classifier.classify(action_rm) == "critical"
+
+    # Critical: SQL DROP TABLE
+    action_sql = ActionRequest(
+        call_id="c3",
+        tool_name="sql_query",
+        arguments={"query": "DROP TABLE users"},
+        caller_persona="ops",
+    )
+    assert classifier.classify(action_sql) == "critical"
+
+    # High: DELETE FROM in arguments
+    action_delete = ActionRequest(
+        call_id="c4",
+        tool_name="sql_query",
+        arguments={"query": "DELETE FROM sessions WHERE expired = true"},
+        caller_persona="ops",
+    )
+    assert classifier.classify(action_delete) == "high"
+
+    # Medium: push keyword in arguments (without --force)
+    action_push = ActionRequest(
+        call_id="c5",
+        tool_name="git_push",
+        arguments={"command": "git push origin main"},
+        caller_persona="coder",
+    )
+    assert classifier.classify(action_push) in ("medium", "critical")
+
+    # Low: completely benign tool and arguments
+    action_safe = ActionRequest(
+        call_id="c6",
+        tool_name="echo",
+        arguments={"message": "hello world"},
+        caller_persona="coder",
+    )
+    assert classifier.classify(action_safe) == "low"
+
+    # Critical via ToolSpec.destructive flag (overrides everything)
+    spec_destructive = ToolSpec(
+        name="nuke",
+        description="Nuke everything",
+        destructive=True,
+    )
+    action_nuke = ActionRequest(
+        call_id="c7",
+        tool_name="nuke",
+        arguments={},
+        caller_persona="ops",
+    )
+    assert classifier.classify(action_nuke, spec=spec_destructive) == "critical"
+
+
+@pytest.mark.asyncio
+async def test_cli_approval_manager_approve(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify CLIApprovalManager returns approved=True when operator types 'y'."""
+    import builtins
+
+    from contracts.models import ActionRequest, ApprovalRequest
+    from safety_approval.manager import CLIApprovalManager
+
+    monkeypatch.setattr(builtins, "input", lambda _prompt: "y")
+
+    manager = CLIApprovalManager()
+    request = ApprovalRequest(
+        request_id="appr-test-01",
+        action=ActionRequest(
+            call_id="call-test-01",
+            tool_name="git_push",
+            arguments={"branch": "main"},
+            caller_persona="coder",
+        ),
+        risk_level="medium",
+        reason="Push operation requires approval.",
+    )
+
+    response = await manager.request_approval(request)
+    assert response.approved is True
+    assert response.approver_id == "cli-operator"
+    assert response.pending is False
+
+
+@pytest.mark.asyncio
+async def test_cli_approval_manager_deny(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify CLIApprovalManager returns approved=False when operator types 'n'."""
+    import builtins
+
+    from contracts.models import ActionRequest, ApprovalRequest
+    from safety_approval.manager import CLIApprovalManager
+
+    monkeypatch.setattr(builtins, "input", lambda _prompt: "n")
+
+    manager = CLIApprovalManager()
+    request = ApprovalRequest(
+        request_id="appr-test-02",
+        action=ActionRequest(
+            call_id="call-test-02",
+            tool_name="destructive_wipe",
+            arguments={"target": "production_db"},
+            caller_persona="ops",
+        ),
+        risk_level="critical",
+        reason="Destructive wipe requires approval.",
+    )
+
+    response = await manager.request_approval(request)
+    assert response.approved is False
+    assert response.approver_id == "cli-operator"
+    assert "Denied" in (response.feedback or "")
+
+
+@pytest.mark.asyncio
+async def test_unapproved_dangerous_action_blocked_end_to_end() -> None:
+    """End-to-end: RuleBasedRiskClassifier + DenyAllApprovalStub blocks dangerous actions."""
+    from safety_risk_classifier.classifier import RuleBasedRiskClassifier
+
+    executor = ToolExecutor(
+        tool_scope_enforcer=ToolScopeEnforcer(),
+        risk_classifier=RuleBasedRiskClassifier(),
+        approval_manager=DenyAllApprovalStub(),
+    )
+
+    decision = RouteDecision(
+        persona="ops",
+        tool_scope=["destructive_wipe"],
+        autonomy="full",
+        confidence=1.0,
+        reasoning="Full autonomy ops decision",
+    )
+
+    call = ToolCall(
+        call_id="call-blocked",
+        tool_name="destructive_wipe",
+        arguments={"target": "all_records"},
+    )
+    result = await executor.execute(
+        tool_call=call,
+        decision=decision,
+        caller_persona="ops",
+    )
+
+    # The action must be denied — unapproved actions cannot proceed
+    assert result.ok is False
+    assert result.denied is True
+    assert "rejected" in (result.error or "").lower()
