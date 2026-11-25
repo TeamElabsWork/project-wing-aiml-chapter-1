@@ -3,9 +3,10 @@
 Owner: C3
 """
 
-from typing import List, Protocol
+import fnmatch
+from typing import List, Optional, Protocol
 
-from contracts.models import ActionRequest
+from contracts.models import ActionRequest, ToolSpec
 
 
 class ToolScopeEnforcerProtocol(Protocol):
@@ -24,9 +25,61 @@ class ToolScopeEnforcer:
     """Enforces that an ActionRequest matches the RouteDecision tool_scope."""
 
     def is_allowed(self, tool_name: str, allowed_scope: List[str]) -> bool:
-        # TODO (C3 Tools Core Owner): Add wildcard scopes (e.g., 'git:*')
-        # and parameter-level constraint filters.
-        return "*" in allowed_scope or tool_name.lower() in [s.lower() for s in allowed_scope]
+        """Check if tool_name matches any allowed scope (supports wildcards, prefixes, and scopes)."""
+        if not tool_name or not tool_name.strip():
+            return False
+
+        tool_norm = tool_name.strip().lower()
+
+        # Try to resolve tool specification to check against required_scopes
+        spec: Optional[ToolSpec] = None
+        try:
+            from personas_tools_core.registry import ToolRegistry
+
+            spec = ToolRegistry.get_spec(tool_norm)
+        except Exception:
+            spec = None
+
+        tool_scopes = {tool_norm}
+        if spec and spec.required_scopes:
+            tool_scopes.update(s.lower() for s in spec.required_scopes)
+
+        for pattern in allowed_scope:
+            pat_norm = pattern.strip().lower()
+            if pat_norm == "*":
+                return True
+
+            # Direct equality against tool name or any required scope
+            if pat_norm in tool_scopes:
+                return True
+
+            # Glob / Wildcard matching (e.g. 'git:*', 'git_*', 'git*')
+            if fnmatch.fnmatchcase(tool_norm, pat_norm):
+                return True
+
+            # Check wildcard pattern against tool required scopes
+            for req_scope in tool_scopes:
+                if fnmatch.fnmatchcase(req_scope, pat_norm):
+                    return True
+
+            # Handle 'prefix:*' style where tool might be 'prefix_something' or 'prefix'
+            if pat_norm.endswith(":*"):
+                prefix = pat_norm[:-2]
+                if (
+                    tool_norm == prefix
+                    or tool_norm.startswith(f"{prefix}_")
+                    or tool_norm.startswith(f"{prefix}:")
+                ):
+                    return True
+                for req_scope in tool_scopes:
+                    if (
+                        req_scope == prefix
+                        or req_scope.startswith(f"{prefix}_")
+                        or req_scope.startswith(f"{prefix}:")
+                    ):
+                        return True
+
+        return False
 
     def enforce(self, action: ActionRequest, allowed_scope: List[str]) -> None:
         if not self.is_allowed(action.tool_name, allowed_scope):
